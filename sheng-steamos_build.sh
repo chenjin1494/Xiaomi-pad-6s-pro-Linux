@@ -520,5 +520,9 @@ echo "                DOSBox, ScummVM, EmulationStation DE"
 echo "  Gaming:       GameMode, MangoHud, Lutris, Heroic, vkBasalt"
 echo "  User:         $USERNAME / $PASSWORD"
 echo ""
+# Fix permissions so CI runner can upload artifacts
+chmod 644 *.7z *.img *.txt 2>/dev/null || true
+chown $(stat -c '%u:%g' .) *.7z *.img *.txt 2>/dev/null || true
+
 trap - EXIT ERR INT TERM
 echo "Build complete!"

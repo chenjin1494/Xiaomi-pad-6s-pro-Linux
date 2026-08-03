@@ -428,16 +428,20 @@ jobs:
           retention-days: 14
           compression-level: 1
 
+      - name: "Prepare boot images"
+        run: |
+          echo "=== Boot image files ==="
+          ls -lah *.img 2>/dev/null || echo "(no .img files)"
+          sudo chmod 644 *.img 2>/dev/null || true
+          sudo chown $(id -u):$(id -g) *.img 2>/dev/null || true
+
       - name: "Upload Boot Images"
         uses: actions/upload-artifact@v4
         with:
           name: steamos-boot
-          path: |
-            boot.img
-            boot_sheng_*.img
-            sheng-steamos_boot_*.img
+          path: "*.img"
           retention-days: 14
-          if-no-files-found: ignore
+          if-no-files-found: warn
 
       - name: "Upload Package List"
         uses: actions/upload-artifact@v4
