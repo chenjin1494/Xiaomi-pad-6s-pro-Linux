@@ -15,6 +15,7 @@ install_gaming_base() {
 
     chroot "$rootdir" pacman -Syu --noconfirm --needed \
         mesa vulkan-swrast vulkan-tools \
+        vulkan-freedreno \
         pipewire pipewire-alsa pipewire-pulse wireplumber \
         alsa-utils alsa-ucm-conf \
         libinput libxkbcommon xorg-xwayland \

@@ -262,6 +262,7 @@ echo "[6/10] Installing gaming components..."
     echo "  >>> Installing Mesa + Vulkan drivers..."
     chroot "$ROOTDIR" pacman -S --noconfirm --needed \
         mesa vulkan-swrast vulkan-tools \
+        vulkan-freedreno \
         lib32-mesa lib32-vulkan-swrast 2>/dev/null || true
 
     # x86/x64 emulation layers
