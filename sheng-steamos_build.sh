@@ -234,22 +234,25 @@ echo "[5/9] Installing gaming components..."
 
 source "$SCRIPT_DIR/lib/gaming-packages.sh"
 
+# Gaming component installation — disable set -e for robustness
+set +e
+
 install_gaming_base "$ROOTDIR"
 install_gamescope "$ROOTDIR"
-install_mangohud "$ROOTDIR" 2>/dev/null || true
-install_controller_support "$ROOTDIR" 2>/dev/null || true
+install_mangohud "$ROOTDIR"
+install_controller_support "$ROOTDIR"
 
 if [ "$LAUNCHER" = "steam" ] || [ "$LAUNCHER" = "both" ]; then
     echo ""
     echo "  >>> Installing Native ARM64 Steam + Proton ARM64 + FEX-Emu..."
-    install_steam "$ROOTDIR" || true
+    install_steam "$ROOTDIR"
 fi
 
 if [ "$LAUNCHER" = "retroarch" ] || [ "$LAUNCHER" = "both" ]; then
     echo ""
     echo "  >>> Installing RetroArch + EmulationStation..."
-    install_retroarch "$ROOTDIR" 2>/dev/null || true
-    install_emulationstation "$ROOTDIR" 2>/dev/null || true
+    install_retroarch "$ROOTDIR"
+    install_emulationstation "$ROOTDIR"
 fi
 
 if [ "$DESKTOP" = "kde" ] || [ "$DESKTOP" = "gnome" ]; then
@@ -257,6 +260,8 @@ if [ "$DESKTOP" = "kde" ] || [ "$DESKTOP" = "gnome" ]; then
     echo "  >>> Installing Desktop Mode ($DESKTOP)..."
     install_desktop_mode "$ROOTDIR" "$DESKTOP"
 fi
+
+set -e
 
 # ==========================================================================
 # Step 6: System configuration

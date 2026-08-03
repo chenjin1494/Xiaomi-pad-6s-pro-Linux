@@ -53,7 +53,6 @@ install_gamescope() {
 # install_steam — Native ARM64 Steam client + Proton ARM64 + FEX-Emu
 # ---------------------------------------------------------------------------
 install_steam() {
-    set +e
     local rootdir="$1"
     echo "Installing Native ARM64 Steam + Proton ARM64..."
 
