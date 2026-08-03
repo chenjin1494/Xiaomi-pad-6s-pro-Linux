@@ -132,29 +132,54 @@ chroot "$ROOTDIR" pacman -Syu --noconfirm --needed
 echo ""
 echo "[3/10] Installing kernel + firmware..."
 
-# Try injecting project kernel .deb/.rpm first
-INJECTED=0
+# Only use ianchb's kernel - do NOT install Arch stock kernel
 if ls "$SCRIPT_DIR"/linux-xiaomi-sheng*.deb &>/dev/null 2>&1; then
-    echo "  -> Injecting .deb kernel packages"
-    inject_deb_kernel "$ROOTDIR" "$SCRIPT_DIR/linux-xiaomi-sheng*.deb"
-    INJECTED=1
-elif ls "$SCRIPT_DIR"/rpm-output/*.rpm &>/dev/null 2>&1; then
-    echo "  -> Injecting .rpm kernel packages"
-    inject_rpm_packages "$ROOTDIR" "$SCRIPT_DIR/rpm-output/*.rpm"
-    INJECTED=1
+    echo "  -> Injecting ianchb kernel .deb"
+    for deb in "$SCRIPT_DIR"/linux-xiaomi-sheng*.deb; do
+        echo "    Extracting: $(basename "$deb")"
+        dpkg-deb --fsys-tarfile "$deb" | tar -x --keep-directory-symlink -C "$ROOTDIR/" 2>/dev/null || true
+    done
+    # Move modules from /lib to /usr/lib (Arch path)
+    for mod_dir in "$ROOTDIR"/lib/modules/*; do
+        [ -d "$mod_dir" ] || continue
+        kver=$(basename "$mod_dir")
+        if [ ! -d "$ROOTDIR/usr/lib/modules/$kver" ]; then
+            echo "    Moving modules: /lib/modules/$kver -> /usr/lib/modules/$kver"
+            mkdir -p "$ROOTDIR/usr/lib/modules"
+            mv "$mod_dir" "$ROOTDIR/usr/lib/modules/"
+        fi
+    done
+else
+    echo "  ERROR: linux-xiaomi-sheng*.deb not found!" >&2
+    echo "  Kernel is required. Aborting." >&2
+    exit 1
 fi
 
-if [ "$INJECTED" -eq 0 ]; then
-    echo "  -> Using Arch Linux ARM repo kernel"
-    chroot "$ROOTDIR" pacman -S --noconfirm --needed linux-aarch64
-fi
-
-# Generate initramfs
+# Generate initramfs for ianchb kernel
 KERNEL_MODULE_DIR=$(detect_kernel_module_dir "$ROOTDIR")
 if [ -n "$KERNEL_MODULE_DIR" ]; then
     echo "  Kernel: $KERNEL_MODULE_DIR"
-    chroot "$ROOTDIR" mkinitcpio -P 2>/dev/null || \
-        chroot "$ROOTDIR" mkinitcpio -k "$KERNEL_MODULE_DIR" -g /boot/initramfs-linux.img 2>/dev/null || true
+
+    # Create mkinitcpio preset for this kernel
+    mkdir -p "$ROOTDIR/etc/mkinitcpio.d"
+    cat > "$ROOTDIR/etc/mkinitcpio.d/linux.preset" <<PRESET
+ALL_kver="$KERNEL_MODULE_DIR"
+PRESET_image="/boot/initramfs-linux.img"
+PRESET_options=""
+PRESET
+
+    # Generate initramfs
+    echo "  Generating initramfs..."
+    chroot "$ROOTDIR" mkinitcpio -k "$KERNEL_MODULE_DIR" -g /boot/initramfs-linux.img 2>/dev/null || {
+        echo "  mkinitcpio failed, trying manual initramfs..."
+        # Fallback: create minimal initramfs
+        chroot "$ROOTDIR" bash -c "cd /usr/lib/modules/$KERNEL_MODULE_DIR && \
+            find . | cpio -o -H newc 2>/dev/null | gzip > /boot/initramfs-linux.img" 2>/dev/null || true
+    }
+
+    echo "  Initramfs: $(ls -lh $ROOTDIR/boot/initramfs-linux.img 2>/dev/null | awk '{print $5}')"
+else
+    echo "  WARNING: No kernel modules found!" >&2
 fi
 
 # Inject firmware
