@@ -158,19 +158,32 @@ if [ ! -e /dev/dri/card0 ]; then
     exit 1
 fi
 
-# Try Gamescope + Steam
-if [ -x "$STEAM_DIR/steamrtarm64/steam" ]; then
-    echo "[$(date)] Starting Gamescope + Steam ARM64 BPM" | tee -a "$LOGFILE"
-    gamescope --adaptive-sync --rt -e -- \
-        "$STEAM_DIR/steamrtarm64/steam" -tenfoot -fulldesktopres -gamepadui -steamos3 2>&1 | tee -a "$LOGFILE"
-else
-    echo "[$(date)] Steam not found, trying FEX fallback" | tee -a "$LOGFILE"
-    gamescope --adaptive-sync --rt -e -- \
-        FEXBash steam -tenfoot -fulldesktopres -gamepadui -steamos3 2>&1 | tee -a "$LOGFILE"
+# Test if GPU/Vulkan is working
+GPU_OK=false
+if [ -e /dev/dri/card0 ]; then
+    if command -v vulkaninfo &>/dev/null; then
+        vulkaninfo --summary 2>/dev/null && GPU_OK=true
+    elif [ -e /dev/dri/renderD128 ]; then
+        GPU_OK=true
+    fi
 fi
 
-# If Gamescope exits, fall back to Weston desktop
-EXIT_CODE=$?
+if [ "$GPU_OK" = "false" ]; then
+    echo "[$(date)] GPU/Vulkan not available, skipping Gamescope" | tee -a "$LOGFILE"
+    EXIT_CODE=1
+else
+    # Try Gamescope + Steam
+    if [ -x "$STEAM_DIR/steamrtarm64/steam" ]; then
+        echo "[$(date)] Starting Gamescope + Steam ARM64 BPM" | tee -a "$LOGFILE"
+        gamescope --adaptive-sync --rt -e -- \
+            "$STEAM_DIR/steamrtarm64/steam" -tenfoot -fulldesktopres -gamepadui -steamos3 2>&1 | tee -a "$LOGFILE"
+    else
+        echo "[$(date)] Steam not found, trying FEX fallback" | tee -a "$LOGFILE"
+        gamescope --adaptive-sync --rt -e -- \
+            FEXBash steam -tenfoot -fulldesktopres -gamepadui -steamos3 2>&1 | tee -a "$LOGFILE"
+    fi
+    EXIT_CODE=$?
+fi
 echo "[$(date)] Gamescope exited with code $EXIT_CODE" | tee -a "$LOGFILE"
 echo ""
 echo "========================================"
@@ -189,17 +202,24 @@ done
 
 if command -v weston &>/dev/null; then
     echo "[$(date)] Starting Weston fallback" | tee -a "$LOGFILE"
-    weston --shell=kiosk --tty=1 --socket=wayland-1 2>&1 | tee -a "$LOGFILE"
+    # Try Weston with DRM backend, fallback to software rendering
+    weston --tty=1 --socket=wayland-1 2>&1 | tee -a "$LOGFILE" || {
+        echo "[$(date)] Weston DRM failed, trying headless backend" | tee -a "$LOGFILE"
+        WESTON_DISABLE_ATOMIC=1 weston --tty=1 --socket=wayland-1 2>&1 | tee -a "$LOGFILE" || {
+            echo "[$(date)] Weston failed" | tee -a "$LOGFILE"
+        }
+    }
 else
-    echo "[$(date)] Weston not found, trying cage" | tee -a "$LOGFILE"
-    if command -v cage &>/dev/null; then
-        cage -- xterm 2>&1 | tee -a "$LOGFILE"
-    else
-        echo "[$(date)] No fallback compositor available" | tee -a "$LOGFILE"
-        echo "Switch to TTY2 (Ctrl+Alt+F2) to debug"
-        sleep 60
-    fi
+    echo "[$(date)] Weston not found" | tee -a "$LOGFILE"
 fi
+
+# Last resort: ensure TTY login is accessible
+echo "[$(date)] Compositor exited" | tee -a "$LOGFILE"
+echo "" | tee -a "$LOGFILE"
+echo "If screen is black, switch to TTY: Ctrl+Alt+F2" | tee -a "$LOGFILE"
+echo "Login: $USER / (check build config for password)" | tee -a "$LOGFILE"
+# Keep a getty on tty1 so there's always a login prompt
+exec /sbin/agetty --autologin root --noclear tty1 linux
 STEOF
     chmod +x "$rootdir/usr/local/bin/steam-gamemode"
 
