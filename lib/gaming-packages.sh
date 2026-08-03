@@ -120,24 +120,7 @@ install_steam() {
         ln -sf libvpx.so.9 "$rootdir/usr/lib/libvpx.so.6"
     fi
 
-    # ---- FEX-Emu ----
-    echo "  >>> Installing FEX-Emu..."
-    chroot "$rootdir" pacman -S --noconfirm --needed fex-emu 2>/dev/null || {
-        echo "  FEX-Emu not in repos, trying AUR..."
-        chroot "$rootdir" su -l "$user" -c "yay -S --noconfirm fex-emu" 2>/dev/null || {
-            echo "  Trying manual FEX-Emu install..."
-            local fex_ver="FEX-2605"
-            local fex_url="https://github.com/FEX-Emu/FEX/releases/download/${fex_ver}/${fex_ver}-aarch64.tar.gz"
-            wget -nv -O /tmp/fex.tar.gz "$fex_url" 2>/dev/null || true
-            if [ -f /tmp/fex.tar.gz ]; then
-                tar -xzf /tmp/fex.tar.gz -C "$rootdir/usr/local/"
-                rm -f /tmp/fex.tar.gz
-            fi
-        }
-    }
-
-    # FEX rootfs
-    chroot "$rootdir" bash -c "FEXRootFSFetcher --name Ubuntu_24_04 --rootfs-path /var/lib/FEX/rootfs" 2>/dev/null || true
+    # FEX-Emu is installed separately via install_fex_emu()
 
     # ---- AppArmor userns fix ----
     cat > "$rootdir/etc/sysctl.d/99-steam-userns.conf" <<'SYSCTL'
@@ -250,6 +233,142 @@ ESEOF
 
     chroot "$rootdir" chown -R "$user:$user" "/home/$user/ES-DE"
     echo "EmulationStation DE installed"
+}
+
+# ---------------------------------------------------------------------------
+# install_box64 — Box64 x86_64 emulator for aarch64
+# ---------------------------------------------------------------------------
+install_box64() {
+    local rootdir="$1"
+    echo "Installing Box64..."
+
+    chroot "$rootdir" pacman -S --noconfirm --needed box64 2>/dev/null || {
+        echo "  box64 not in repos, trying AUR..."
+        chroot "$rootdir" su -l "${USERNAME:-gamer}" -c "yay -S --noconfirm box64" 2>/dev/null || {
+            echo "  Trying manual Box64 install..."
+            local box64_url="https://github.com/ptitSeb/box64/releases/latest/download/box64-aarch64.tar.gz"
+            wget -nv -O /tmp/box64.tar.gz "$box64_url" 2>/dev/null || true
+            if [ -f /tmp/box64.tar.gz ]; then
+                tar -xzf /tmp/box64.tar.gz -C "$rootdir/usr/local/" 2>/dev/null || true
+                rm -f /tmp/box64.tar.gz
+            fi
+        }
+    }
+
+    # Box64 environment
+    cat > "$rootdir/etc/profile.d/box64-env.sh" <<'BOX64ENV'
+export BOX64_DYNAREC=1
+export BOX64_DYNAREC_STRONGMEM=2
+export BOX64_DYNAREC_BIGBLOCK=1
+BOX64ENV
+
+    echo "Box64 installed"
+}
+
+# ---------------------------------------------------------------------------
+# install_fex_emu — FEX-Emu x86_64 emulator (standalone install)
+# ---------------------------------------------------------------------------
+install_fex_emu() {
+    local rootdir="$1"
+    echo "Installing FEX-Emu..."
+
+    chroot "$rootdir" pacman -S --noconfirm --needed fex-emu 2>/dev/null || {
+        echo "  FEX-Emu not in repos, trying manual install..."
+        local fex_ver="FEX-2605"
+        local fex_url="https://github.com/FEX-Emu/FEX/releases/download/${fex_ver}/${fex_ver}-aarch64.tar.gz"
+        wget -nv -O /tmp/fex.tar.gz "$fex_url" 2>/dev/null || true
+        if [ -f /tmp/fex.tar.gz ]; then
+            tar -xzf /tmp/fex.tar.gz -C "$rootdir/usr/local/" 2>/dev/null || true
+            rm -f /tmp/fex.tar.gz
+        fi
+    }
+
+    # FEX rootfs
+    chroot "$rootdir" bash -c "FEXRootFSFetcher --name Ubuntu_24_04 --rootfs-path /var/lib/FEX/rootfs" 2>/dev/null || true
+
+    echo "FEX-Emu installed"
+}
+
+# ---------------------------------------------------------------------------
+# install_emulators — RetroArch + standalone emulators
+# ---------------------------------------------------------------------------
+install_emulators() {
+    local rootdir="$1"
+    echo "Installing emulators..."
+
+    # RetroArch + libretro cores
+    install_retroarch "$rootdir"
+
+    # Standalone emulators via pacman
+    chroot "$rootdir" pacman -S --noconfirm --needed \
+        dolphin-emu \
+        ppsspp \
+        pcsx2 \
+        rpcs3 \
+        yuzu \
+        citra \
+        mgba \
+        desmume \
+        snes9x \
+        mupen64plus \
+        duckstation \
+        flycast \
+        dosbox \
+        dosbox-staging \
+        scummvm \
+        wine \
+        winetricks \
+        gamemode \
+        vkbasalt 2>/dev/null || {
+        echo "  Warning: Some emulators not available in repos, skipping unavailable ones"
+        # Try individual installs for what's available
+        for pkg in dolphin-emu ppsspp mgba mupen64plus dosbox-staging scummvm wine winetricks gamemode; do
+            chroot "$rootdir" pacman -S --noconfirm --needed "$pkg" 2>/dev/null || true
+        done
+    }
+
+    # EmulationStation DE
+    install_emulationstation "$rootdir"
+
+    echo "Emulators installed"
+}
+
+# ---------------------------------------------------------------------------
+# install_gaming_extras — Additional gaming tools and launchers
+# ---------------------------------------------------------------------------
+install_gaming_extras() {
+    local rootdir="$1"
+    echo "Installing gaming extras..."
+
+    # Gaming tools
+    chroot "$rootdir" pacman -S --noconfirm --needed \
+        gamemode \
+        vkbasalt \
+        mangohud \
+        goverlay \
+        steam-devices \
+        gamecontrollerdb \
+        lib32-mesa \
+        lib32-vulkan-swrast \
+        lib32-sdl2 2>/dev/null || {
+        echo "  Warning: Some gaming extras not available"
+        for pkg in gamemode mangohud steam-devices gamecontrollerdb; do
+            chroot "$rootdir" pacman -S --noconfirm --needed "$pkg" 2>/dev/null || true
+        done
+    }
+
+    # Lutris (game manager)
+    chroot "$rootdir" pacman -S --noconfirm --needed lutris 2>/dev/null || true
+
+    # Heroic Games Launcher (Epic/GOG)
+    chroot "$rootdir" pacman -S --noconfirm --needed heroic-games-launcher-bin 2>/dev/null || {
+        echo "  Heroic not in repos, trying manual install..."
+        local heroic_url="https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/releases/latest/download/Heroic-x86_64.AppImage"
+        wget -nv -O "$rootdir/usr/local/bin/heroic.AppImage" "$heroic_url" 2>/dev/null || true
+        chmod +x "$rootdir/usr/local/bin/heroic.AppImage" 2>/dev/null || true
+    }
+
+    echo "Gaming extras installed"
 }
 
 # ---------------------------------------------------------------------------

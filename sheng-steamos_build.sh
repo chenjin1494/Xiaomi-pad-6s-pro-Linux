@@ -242,18 +242,30 @@ echo "[5/9] Installing gaming components..."
     install_mangohud "$ROOTDIR"
     install_controller_support "$ROOTDIR"
 
+    # x86/x64 emulation layers
+    echo ""
+    echo "  >>> Installing FEX-Emu (x86/x64 translation)..."
+    install_fex_emu "$ROOTDIR"
+
+    echo ""
+    echo "  >>> Installing Box64 (x86_64 emulation)..."
+    install_box64 "$ROOTDIR"
+
+    # Steam
     if [ "$LAUNCHER" = "steam" ] || [ "$LAUNCHER" = "both" ]; then
         echo ""
-        echo "  >>> Installing Native ARM64 Steam + Proton ARM64 + FEX-Emu..."
+        echo "  >>> Installing Native ARM64 Steam + Proton ARM64..."
         install_steam "$ROOTDIR"
     fi
 
-    if [ "$LAUNCHER" = "retroarch" ] || [ "$LAUNCHER" = "both" ]; then
-        echo ""
-        echo "  >>> Installing RetroArch + EmulationStation..."
-        install_retroarch "$ROOTDIR"
-        install_emulationstation "$ROOTDIR"
-    fi
+    # Emulators + gaming extras
+    echo ""
+    echo "  >>> Installing emulators (RetroArch, Dolphin, PPSSPP, etc.)..."
+    install_emulators "$ROOTDIR"
+
+    echo ""
+    echo "  >>> Installing gaming extras (Lutris, Heroic, GameMode, etc.)..."
+    install_gaming_extras "$ROOTDIR"
 
     if [ "$DESKTOP" = "kde" ] || [ "$DESKTOP" = "gnome" ]; then
         echo ""
@@ -393,10 +405,15 @@ esac
 
 echo ""
 echo "Components:"
-echo "  Base:      Arch Linux ARM"
-echo "  Desktop:   $DESKTOP"
-echo "  Launcher:  $LAUNCHER"
-echo "  User:      $USERNAME / $PASSWORD"
+echo "  Base:         Arch Linux ARM"
+echo "  Desktop:      $DESKTOP"
+echo "  Launcher:     $LAUNCHER"
+echo "  x86 Layer:    FEX-Emu + Box64"
+echo "  Steam:        Native ARM64 + Proton ARM64"
+echo "  Emulators:    RetroArch, Dolphin, PPSSPP, mGBA, Mupen64Plus,"
+echo "                DOSBox, ScummVM, EmulationStation DE"
+echo "  Gaming:       GameMode, MangoHud, Lutris, Heroic, vkBasalt"
+echo "  User:         $USERNAME / $PASSWORD"
 echo ""
 trap - EXIT ERR INT TERM
 echo "Build complete!"
