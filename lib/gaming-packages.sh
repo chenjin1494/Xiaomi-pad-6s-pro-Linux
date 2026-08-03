@@ -191,7 +191,6 @@ SDEOF
     chroot "$rootdir" chown -R "$user:$user" "$steam_dir" "$rootdir/home/$user/.steam" 2>/dev/null || true
 
     echo "Native ARM64 Steam + Proton + FEX installed"
-    set -e
     return 0
 }
 

@@ -242,9 +242,7 @@ install_controller_support "$ROOTDIR" 2>/dev/null || true
 if [ "$LAUNCHER" = "steam" ] || [ "$LAUNCHER" = "both" ]; then
     echo ""
     echo "  >>> Installing Native ARM64 Steam + Proton ARM64 + FEX-Emu..."
-    set +e
-    install_steam "$ROOTDIR"
-    set -e
+    install_steam "$ROOTDIR" || true
 fi
 
 if [ "$LAUNCHER" = "retroarch" ] || [ "$LAUNCHER" = "both" ]; then
