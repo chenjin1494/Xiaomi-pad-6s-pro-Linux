@@ -131,6 +131,7 @@ SYSCTL
     cat > "$rootdir/usr/local/bin/steam-gamemode" <<'STEOF'
 #!/bin/bash
 # Steam Game Mode — Native ARM64 BPM
+# Fallback to TTY login if Gamescope/Steam fails
 export XDG_RUNTIME_DIR=/run/user/1000
 export SDL_VIDEO_DRIVER=wayland
 export QT_QPA_PLATFORM=wayland
@@ -139,20 +140,44 @@ export MOZ_ENABLE_WAYLAND=1
 export FEX_ROOTFS=/var/lib/FEX/rootfs
 export STEAM_FRAME_FORCE_CLOSE=1
 
+LOGFILE="/var/log/steam-gamemode.log"
 STEAM_DIR="$HOME/.local/share/Steam"
 
+# Wait for GPU
 for i in $(seq 1 30); do
     [ -e /dev/dri/card0 ] && break
     sleep 1
 done
 
-if [ -x "$STEAM_DIR/steamrtarm64/steam" ]; then
-    exec gamescope --adaptive-sync --rt -e -- \
-        "$STEAM_DIR/steamrtarm64/steam" -tenfoot -fulldesktopres -gamepadui -steamos3
-else
-    exec gamescope --adaptive-sync --rt -e -- \
-        FEXBash steam -tenfoot -fulldesktopres -gamepadui -steamos3
+if [ ! -e /dev/dri/card0 ]; then
+    echo "[$(date)] ERROR: No GPU device found ( /dev/dri/card0 )" | tee "$LOGFILE"
+    echo "Falling back to TTY login..."
+    exit 1
 fi
+
+# Try Gamescope + Steam
+if [ -x "$STEAM_DIR/steamrtarm64/steam" ]; then
+    echo "[$(date)] Starting Gamescope + Steam ARM64 BPM" | tee -a "$LOGFILE"
+    gamescope --adaptive-sync --rt -e -- \
+        "$STEAM_DIR/steamrtarm64/steam" -tenfoot -fulldesktopres -gamepadui -steamos3 2>&1 | tee -a "$LOGFILE"
+else
+    echo "[$(date)] Steam not found, trying FEX fallback" | tee -a "$LOGFILE"
+    gamescope --adaptive-sync --rt -e -- \
+        FEXBash steam -tenfoot -fulldesktopres -gamepadui -steamos3 2>&1 | tee -a "$LOGFILE"
+fi
+
+# If Gamescope exits, show error and wait
+EXIT_CODE=$?
+echo "[$(date)] Gamescope exited with code $EXIT_CODE" | tee -a "$LOGFILE"
+echo ""
+echo "========================================"
+echo " Game Mode exited (code: $EXIT_CODE)"
+echo " Log: $LOGFILE"
+echo ""
+echo " Switch to TTY2 (Ctrl+Alt+F2) to debug"
+echo " Or run: sudo systemctl start desktop-mode"
+echo "========================================"
+sleep 30
 STEOF
     chmod +x "$rootdir/usr/local/bin/steam-gamemode"
 
@@ -701,8 +726,10 @@ Environment=MOZ_ENABLE_WAYLAND=1
 Environment=FEX_ROOTFS=/var/lib/FEX/rootfs
 
 ExecStart=/usr/local/bin/steam-gamemode
-Restart=always
-RestartSec=3
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=3
 
 [Install]
 WantedBy=graphical.target
