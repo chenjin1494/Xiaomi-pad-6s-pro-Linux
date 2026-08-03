@@ -317,17 +317,9 @@ install_mesa_from_source() {
             -Dshader-cache=enabled \
             -Dgallium-extra-hud=true \
             -Dgallium-rusticl=false \
-            -Dgallium-va=disabled \
-            -Dgallium-vdpau=disabled \
-            -Dgallium-xa=disabled \
-            -Dva-api=disabled \
-            -Dvdpau=disabled \
             -Dvalgrind=disabled \
             -Dlibunwind=disabled \
-            -Dlmsensors=disabled \
-            -Dbuild-tests=false \
-            -Dtools=[] \
-            -Ddraw-use-llvm=false" 2>/dev/null || {
+            -Dbuild-tests=false" 2>/dev/null || {
         echo "Warning: Mesa meson setup failed" >&2
         return 1
     }

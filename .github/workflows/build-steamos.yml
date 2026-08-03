@@ -252,11 +252,10 @@ jobs:
             -Degl=enabled -Dgbm=enabled -Dopengl=true \
             -Dllvm=enabled -Dshared-llvm=enabled \
             -Dshader-cache=enabled \
-            -Dgallium-extra-hud=true -Dgallium-rusticl=false \
-            -Dgallium-va=disabled -Dgallium-vdpau=disabled \
-            -Dgallium-xa=disabled -Dva-api=disabled -Dvdpau=disabled \
-            -Dvalgrind=disabled -Dlibunwind=disabled -Dlmsensors=disabled \
-            -Dbuild-tests=false -Dtools=[] -Ddraw-use-llvm=false
+            -Dgallium-extra-hud=true \
+            -Dgallium-rusticl=false \
+            -Dvalgrind=disabled -Dlibunwind=disabled \
+            -Dbuild-tests=false
           ninja -C build
           DESTDIR=${{ github.workspace }}/mesa-stage ninja -C build install
           echo "mesa_version=$MESA_VER" >> $GITHUB_OUTPUT
