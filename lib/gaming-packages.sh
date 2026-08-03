@@ -518,6 +518,9 @@ SUDOERS
         "$rootdir/etc/systemd/system/graphical.target.wants/steam-gamemode.service"
 
     # ---- Performance tuning ----
+    mkdir -p "$rootdir/etc/security/limits.d"
+    mkdir -p "$rootdir/etc/sysctl.d"
+    mkdir -p "$rootdir/etc/profile.d"
     cat > "$rootdir/etc/security/limits.d/99-gaming.conf" <<'GQEOF'
 @audio   -  rtprio     95
 @audio   -  memlock    unlimited
