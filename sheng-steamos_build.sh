@@ -242,10 +242,12 @@ echo "[5/9] Installing gaming components..."
     install_mangohud "$ROOTDIR"
     install_controller_support "$ROOTDIR"
 
-    # Mesa from source (Turnip + Freedreno for Adreno 740)
+    # Mesa + Vulkan drivers from repos
     echo ""
-    echo "  >>> Building Mesa from source (Turnip Vulkan + Freedreno)..."
-    install_mesa_from_source "$ROOTDIR"
+    echo "  >>> Installing Mesa + Vulkan drivers..."
+    chroot "$ROOTDIR" pacman -S --noconfirm --needed \
+        mesa vulkan-swrast vulkan-tools \
+        lib32-mesa lib32-vulkan-swrast 2>/dev/null || true
 
     # x86/x64 emulation layers
     echo ""

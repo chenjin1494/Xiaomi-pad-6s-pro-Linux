@@ -150,146 +150,6 @@ jobs:
           retention-days: 3
 
   # ==========================================================================
-  # Qualcomm Video Driver (VPU hardware decoding/encoding)
-  # ==========================================================================
-  build-video-driver:
-    name: "Build Video Driver"
-    runs-on: ubuntu-24.04-arm
-    continue-on-error: true
-    steps:
-      - name: "Checkout video-driver"
-        run: git clone --depth=1 https://github.com/qualcomm-linux/video-driver.git
-
-      - name: "Clone kernel source"
-        run: git clone --depth=1 --branch sheng-7.1.5 https://github.com/ianchb/sm8550-mainline.git kernel-src
-
-      - name: "Build kernel module"
-        run: |
-          cd kernel-src
-          # Use existing config if available, otherwise use defconfig
-          if [ -f ../linux-xiaomi-sheng*.deb ]; then
-            dpkg-deb -x ../linux-xiaomi-sheng*.deb /tmp/kdeb/
-            cp /tmp/kdeb/boot/config-* .config 2>/dev/null || make ARCH=arm64 defconfig
-          else
-            make ARCH=arm64 defconfig
-          fi
-          # Prepare kernel headers
-          make ARCH=arm64 modules_prepare -j$(nproc)
-          KVER=$(make ARCH=arm64 kernelrelease -s)
-          echo "Kernel version: $KVER"
-          cd ../video-driver
-          export KERNEL_SRC=${{ github.workspace }}/kernel-src
-          export CONFIG_MSM_VIDC_PINEAPPLE=y
-          make -j$(nproc) modules
-          mkdir -p ../video-driver-stage/lib/modules/$KVER/extra
-          find . -name '*.ko' -exec cp {} ../video-driver-stage/lib/modules/$KVER/extra/ \; 2>/dev/null
-
-      - name: "Package"
-        run: |
-          KVER=$(ls /lib/modules/ | sort -V | tail -1)
-          mkdir -p video-driver-pkg/DEBIAN
-          cp -r video-driver-stage/* video-driver-pkg/
-          cat > video-driver-pkg/DEBIAN/control << EOF
-          Package: qualcomm-video-driver
-          Version: 1.0.0-1
-          Architecture: arm64
-          Description: Qualcomm VPU video driver (H.264/H.265/VP9/AV1 hardware decode/encode)
-          EOF
-          # Post-install: depmod
-          cat > video-driver-pkg/DEBIAN/postinst << 'POSTINST'
-          #!/bin/bash
-          depmod -a
-          POSTINST
-          chmod 755 video-driver-pkg/DEBIAN/postinst
-          dpkg-deb --build video-driver-pkg
-          mv video-driver-pkg.deb qualcomm-video-driver_1.0.0-1_arm64.deb
-
-      - name: "Upload"
-        uses: actions/upload-artifact@v4
-        with:
-          name: video-driver-deb
-          path: qualcomm-video-driver_*.deb
-          retention-days: 7
-
-  # ==========================================================================
-  # Mesa from source (Turnip + Freedreno for Adreno 740)
-  # ==========================================================================
-  build-mesa:
-    name: "Build Mesa (Turnip)"
-    runs-on: ubuntu-24.04-arm
-    steps:
-      - name: "Install Build Tools"
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential ninja-build python3-mako python3-yaml \
-            libdrm-dev libxml2-dev libx11-dev libxcb1-dev libxshmfence-dev \
-            libxrandr-dev libxdamage-dev libxfixes-dev libxxf86vm-dev \
-            wayland-protocols libwayland-dev \
-            llvm-dev libelf-dev libexpat1-dev zlib1g-dev libzstd-dev \
-            glslang-tools spirv-tools \
-            libvulkan-dev \
-            pkg-config cmake bison flex python3-packaging \
-            libglvnd-dev libxext-dev libxdamage-dev libxfixes-dev libxrandr-dev
-          pip3 install --upgrade meson
-
-      - name: "Clone Mesa (mainline)"
-        run: git clone --depth=1 https://gitlab.freedesktop.org/mesa/mesa.git
-
-      - name: "Build Mesa"
-        run: |
-          cd mesa
-          # Reference: lfdevs/mesa-for-android-container meson.options
-          # Adjusted for bare-metal Linux (msm DRM) instead of Android (kgsl)
-          meson setup build/ \
-            --prefix=/usr \
-            --libdir=lib/aarch64-linux-gnu \
-            --buildtype=release \
-            -Dplatforms=x11,wayland \
-            -Dgallium-drivers=freedreno,zink,virgl,llvmpipe \
-            -Dgallium-va=disabled \
-            -Dgallium-mediafoundation=disabled \
-            -Dvulkan-drivers=freedreno \
-            -Dvulkan-layers= \
-            -Degl=enabled \
-            -Dgles2=enabled \
-            -Dglvnd=enabled \
-            -Dglx=dri \
-            -Dgles1=disabled \
-            -Dlibunwind=disabled \
-            -Dintel-rt=disabled \
-            -Dmicrosoft-clc=disabled \
-            -Dvalgrind=disabled \
-            -Dfreedreno-kmds=msm \
-            -Dshader-cache=enabled \
-            -Dbuild-tests=false
-          ninja -C build/
-          DESTDIR=${{ github.workspace }}/mesa-stage ninja -C build/ install
-
-      - name: "Package Mesa"
-        run: |
-          mkdir -p mesa-pkg/DEBIAN
-          cp -r mesa-stage/usr mesa-pkg/
-          if [ -d mesa-pkg/usr/lib/aarch64-linux-gnu ]; then
-            cp -r mesa-pkg/usr/lib/aarch64-linux-gnu/* mesa-pkg/usr/lib/ 2>/dev/null || true
-          fi
-          cat > mesa-pkg/DEBIAN/control << EOF
-          Package: mesa-turnip
-          Version: 26.2.0-1
-          Architecture: arm64
-          Description: Mesa with Turnip Vulkan + Freedreno (Adreno 740, msm DRM)
-          EOF
-          dpkg-deb --build mesa-pkg
-          mv mesa-pkg.deb mesa-turnip_26.2.0_arm64.deb
-
-      - name: "Upload"
-        uses: actions/upload-artifact@v4
-        with:
-          name: mesa-turnip-deb
-          path: mesa-turnip_*.deb
-          retention-days: 7
-
-  # ==========================================================================
   # Device components (from debian-sheng, extracted into Arch rootfs)
   # ==========================================================================
   build-device-components:
@@ -496,7 +356,6 @@ jobs:
       - build-kernel
       - build-device-components
       - build-firmware-sensors
-      - build-mesa
     steps:
       - name: "Checkout"
         uses: actions/checkout@v4
@@ -532,17 +391,7 @@ jobs:
           name: firmware-sensors-deb
           path: lib/debs/
 
-      - name: "Download Mesa Turnip"
-        uses: actions/download-artifact@v4
-        with:
-          name: mesa-turnip-deb
-          path: lib/debs/
 
-      - name: "Download Video Driver"
-        uses: actions/download-artifact@v4
-        with:
-          name: video-driver-deb
-          path: lib/debs/
 
       - name: "Verify .deb files"
         run: |
@@ -619,8 +468,7 @@ jobs:
             | Architecture | Parallel component builds |
 
             ### Components
-            - **Mesa mainline** (Turnip Vulkan + Freedreno, compiled from source, LTO optimized)
-            - **Qualcomm VPU Video Driver** (H.264/H.265/VP9/AV1 hardware decode/encode)
+            - Mesa (from Arch Linux ARM repos)
             - **Native ARM64 Steam** client + Proton ARM64
             - **FEX-Emu** + **Box64** (x86/x64 translation)
             - **Eden** (Nintendo Switch emulator, Yuzu fork)
