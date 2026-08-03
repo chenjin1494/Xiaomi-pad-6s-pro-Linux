@@ -430,7 +430,6 @@ case "$OUTPUT_TYPE" in
         echo ""
         echo "============================================="
         echo " Done: sheng-steamos_${LAUNCHER}_${TIMESTAMP}.7z"
-        [ -n "$BOOT_IMG" ] && echo " Boot: $BOOT_IMG"
         echo "============================================="
         ;;
     sd)

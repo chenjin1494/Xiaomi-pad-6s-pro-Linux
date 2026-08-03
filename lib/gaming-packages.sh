@@ -273,8 +273,8 @@ install_retroarch() {
 # ---------------------------------------------------------------------------
 install_emulationstation() {
     local rootdir="$1"
-    local es_version="3.1.6"
-    local es_url="https://gitlab.com/es-de/emulationstation-de/-/releases/v${es_version}/downloads/EmulationStation-DE-x64_${es_version}.AppImage"
+    local es_version="3.2.0"
+    local es_url="https://gitlab.com/es-de/emulationstation-de/-/releases/v${es_version}/downloads/EmulationStation-DE-Linux-x64-${es_version}.AppImage"
 
     echo "Installing EmulationStation DE ${es_version}..."
 
@@ -426,6 +426,7 @@ install_rpcs3() {
     local user="${USERNAME:-gamer}"
     mkdir -p "$rootdir/home/$user/.config/rpcs3"
     mkdir -p "$rootdir/home/$user/.local/share/rpcs3"
+    mkdir -p "$rootdir/usr/local/share/applications"
     cat > "$rootdir/usr/local/share/applications/rpcs3.desktop" <<'RPDEOF'
 [Desktop Entry]
 Type=Application
