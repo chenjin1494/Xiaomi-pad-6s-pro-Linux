@@ -177,15 +177,25 @@ jobs:
           autoreconf -is && ./configure --prefix=/usr && make -j$(nproc)
           make DESTDIR=$PWD/stage install
           mkdir -p stage/usr/lib/systemd/system
-          cp ../patches/adsprpcd-sensorspd.service stage/usr/lib/systemd/system/
+          cat > stage/usr/lib/systemd/system/adsprpcd-sensorspd.service << 'SVCEOF'
+          [Unit]
+          Description=Qualcomm ADSPRPC and SensorsPD daemon
+          After=network.target
+          
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/adsprpcd
+          Restart=on-failure
+          
+          [Install]
+          WantedBy=multi-user.target
+          SVCEOF
 
       # ---- libssc ----
       - name: "Build libssc"
         run: |
           git clone https://codeberg.org/DylanVanAssche/libssc.git libssc-src
           cd libssc-src
-          [ -f "${{ github.workspace }}/patches/wait_for_qmi_service.patch" ] && \
-            patch -Np1 < "${{ github.workspace }}/patches/wait_for_qmi_service.patch" || true
           meson setup build --prefix=/usr && meson compile -C build
           DESTDIR=$PWD/stage meson install -C build
 
@@ -278,10 +288,15 @@ jobs:
           EOF
           cd .. && dpkg-deb --build --root-owner-group deb-sheng-devauth
 
-      - name: "Package sheng-sensors"
+      - name: "Package sheng-sensors (clone from debian-sheng)"
         run: |
+          git clone --depth 1 https://github.com/ianchb/debian-sheng.git /tmp/debian-sheng
           mkdir -p deb-sheng-sensors/DEBIAN
-          cp -r sheng-sensors-files/usr deb-sheng-sensors/
+          if [ -d /tmp/debian-sheng/sheng-sensors-files/usr ]; then
+            cp -r /tmp/debian-sheng/sheng-sensors-files/usr deb-sheng-sensors/
+          else
+            mkdir -p deb-sheng-sensors/usr
+          fi
           cat > deb-sheng-sensors/DEBIAN/control << EOF
           Package: sheng-sensors
           Version: 20240917-1
@@ -289,6 +304,7 @@ jobs:
           Description: Sensor config files
           EOF
           dpkg-deb --build deb-sheng-sensors
+          rm -rf /tmp/debian-sheng
 
       - name: "Package firmware"
         run: |
