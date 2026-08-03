@@ -184,14 +184,30 @@ DEB_COUNT=$(ls -1 "$DEB_DIR"/*.deb 2>/dev/null | wc -l)
 if [ "$DEB_COUNT" -gt 0 ]; then
     echo "  Found $DEB_COUNT .deb packages, extracting..."
     set +o pipefail
+    set +e
     for deb in "$DEB_DIR"/*.deb; do
-        echo "    -> $(basename "$deb")"
-        dpkg-deb --fsys-tarfile "$deb" 2>/dev/null | tar -x --keep-directory-symlink --warning=no-unknown-keyword -C "$ROOTDIR/" 2>/dev/null || true
+        [ -f "$deb" ] || continue
+        deb_name=$(basename "$deb")
+        echo "    -> $deb_name"
+        # Verify it's a valid .deb (ar archive)
+        if ! file "$deb" | grep -q 'Debian\|ar archive' 2>/dev/null; then
+            echo "      Skipping (not a valid .deb)"
+            continue
+        fi
+        # Extract data.tar.* from .deb
+        tmp_deb=$(mktemp -d)
+        dpkg-deb --fsys-tarfile "$deb" > "$tmp_deb/data.tar" 2>/dev/null
+        if [ -s "$tmp_deb/data.tar" ]; then
+            tar -xf "$tmp_deb/data.tar" --keep-directory-symlink --warning=no-unknown-keyword -C "$ROOTDIR/" 2>/dev/null || true
+        fi
+        rm -rf "$tmp_deb"
     done
-    set -o pipefail
+    set -e
     # Run postinst scripts
     for deb in "$DEB_DIR"/*.deb; do
+        [ -f "$deb" ] || continue
         pkg_name=$(dpkg-deb -f "$deb" Package 2>/dev/null || echo "")
+        [ -n "$pkg_name" ] || continue
         postinst="$ROOTDIR/var/lib/dpkg/info/${pkg_name}.postinst"
         if [ -f "$postinst" ]; then
             chroot "$ROOTDIR" bash "/var/lib/dpkg/info/${pkg_name}.postinst" configure 2>/dev/null || true
