@@ -351,6 +351,45 @@ install_mesa_from_source() {
 }
 
 # ---------------------------------------------------------------------------
+# install_rpcs3 — RPCS3 PlayStation 3 emulator
+#   params: <rootdir>
+# ---------------------------------------------------------------------------
+install_rpcs3() {
+    local rootdir="$1"
+    echo "Installing RPCS3 (PlayStation 3 emulator)..."
+
+    local rpcs3_url="https://github.com/RPCS3/rpcs3-binaries-linux-arm64/releases/download/build-daa437904edaddc746a466d7a3c76e415bba5c00/rpcs3-v0.0.42-19689-daa43790_linux_aarch64.AppImage"
+    wget -nv -O "$rootdir/usr/local/bin/rpcs3.AppImage" "$rpcs3_url" || {
+        echo "Warning: RPCS3 download failed" >&2
+        return 1
+    }
+    chmod +x "$rootdir/usr/local/bin/rpcs3.AppImage"
+
+    # Create desktop entry
+    local user="${USERNAME:-gamer}"
+    mkdir -p "$rootdir/home/$user/.config/rpcs3"
+    mkdir -p "$rootdir/home/$user/.local/share/rpcs3"
+    cat > "$rootdir/usr/local/share/applications/rpcs3.desktop" <<'RPDEOF'
+[Desktop Entry]
+Type=Application
+Name=RPCS3
+Comment=PlayStation 3 Emulator
+Exec=/usr/local/bin/rpcs3.AppImage %f
+Icon=rpcs3
+Terminal=false
+Categories=Game;Emulator;
+MimeType=application/x-ps3-rom;
+RPDEOF
+    chmod +x "$rootdir/usr/local/share/applications/rpcs3.desktop"
+
+    chroot "$rootdir" chown -R "$user:$user" \
+        "/home/$user/.config/rpcs3" \
+        "/home/$user/.local/share/rpcs3"
+
+    echo "RPCS3 installed"
+}
+
+# ---------------------------------------------------------------------------
 # install_eden — Eden Nintendo Switch emulator (fork of Yuzu)
 #   params: <rootdir>
 # ---------------------------------------------------------------------------

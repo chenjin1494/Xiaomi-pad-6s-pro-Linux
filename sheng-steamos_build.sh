@@ -263,7 +263,11 @@ echo "[5/9] Installing gaming components..."
         install_steam "$ROOTDIR"
     fi
 
-    # Nintendo Switch emulator
+    # Console emulators
+    echo ""
+    echo "  >>> Installing RPCS3 (PlayStation 3 emulator)..."
+    install_rpcs3 "$ROOTDIR"
+
     echo ""
     echo "  >>> Installing Eden (Nintendo Switch emulator)..."
     install_eden "$ROOTDIR"
@@ -422,6 +426,7 @@ echo "  GPU Driver:   Mesa 25.1.5 (Turnip Vulkan + Freedreno, from source)"
 echo "  x86 Layer:    FEX-Emu + Box64"
 echo "  Steam:        Native ARM64 + Proton ARM64"
 echo "  Switch:       Eden (Yuzu fork)"
+echo "  PS3:          RPCS3 v0.0.42"
 echo "  Emulators:    RetroArch, Dolphin, PPSSPP, mGBA, Mupen64Plus,"
 echo "                DOSBox, ScummVM, EmulationStation DE"
 echo "  Gaming:       GameMode, MangoHud, Lutris, Heroic, vkBasalt"
