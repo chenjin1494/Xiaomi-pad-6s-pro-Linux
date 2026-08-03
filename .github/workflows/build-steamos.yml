@@ -203,12 +203,15 @@ jobs:
       # ---- iio-sensor-proxy ----
       - name: "Build iio-sensor-proxy"
         run: |
-          sudo dpkg -i libssc-src/stage/*.deb 2>/dev/null || true
+          # Install libssc to system prefix so pkg-config can find it
+          sudo cp -r libssc-src/stage/usr/* /usr/
+          sudo ldconfig
+          echo "libssc pkg-config:"
+          pkg-config --cflags --libs libssc 2>&1 || echo "(not found via pkg-config)"
           wget -q https://gitlab.freedesktop.org/hadess/iio-sensor-proxy/-/archive/3.9/iio-sensor-proxy-3.9.tar.gz
           tar -xf iio-sensor-proxy-3.9.tar.gz
           cd iio-sensor-proxy-3.9
-          PKG_CONFIG_PATH="${{ github.workspace }}/libssc-src/stage/usr/lib/pkgconfig:$PKG_CONFIG_PATH" \
-            meson setup output --prefix=/usr -Dssc-support=enabled -Dsystemdsystemunitdir=/usr/lib/systemd/system
+          meson setup output --prefix=/usr -Dssc-support=enabled -Dsystemdsystemunitdir=/usr/lib/systemd/system
           meson compile -C output
           DESTDIR=$PWD/stage meson install --no-rebuild -C output
 
