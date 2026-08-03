@@ -1,4 +1,4 @@
-# =============================================================================
+﻿# =============================================================================
 # Build SteamOS (Arch Linux ARM + parallel component builds)
 # =============================================================================
 
@@ -165,7 +165,7 @@ jobs:
           gh release download "$TAG" --repo ianchb/sm8550-mainline --pattern "linux-xiaomi-sheng*.deb" --clobber
           sudo dpkg -i linux-xiaomi-sheng*.deb
         env:
-          GH_TOKEN: *** secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: "Build kernel module"
         run: |
