@@ -261,6 +261,7 @@ if [ "$DESKTOP" = "kde" ] || [ "$DESKTOP" = "gnome" ]; then
     install_desktop_mode "$ROOTDIR" "$DESKTOP"
 fi
 
+true  # Reset exit status before re-enabling set -e
 set -e
 
 # ==========================================================================
