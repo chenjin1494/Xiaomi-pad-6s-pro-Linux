@@ -229,7 +229,7 @@ jobs:
             llvm-dev libelf-dev libexpat1-dev zlib1g-dev libzstd-dev \
             glslang-tools spirv-tools \
             libvulkan-dev \
-            pkg-config cmake python3-packaging bison flex
+            pkg-config cmake bison flex python3-packaging
           pip3 install --upgrade meson
 
       - name: "Clone Mesa (mainline)"
@@ -238,30 +238,35 @@ jobs:
       - name: "Build Mesa"
         run: |
           cd mesa
-          MESA_VER=$(git describe --tags --always 2>/dev/null || echo "git-mainline")
-          echo "Mesa version: $MESA_VER"
-          meson setup build \
+          # Reference: lfdevs/mesa-for-android-container meson.options
+          # Adjusted for bare-metal Linux (msm DRM) instead of Android (kgsl)
+          meson setup build/ \
             --prefix=/usr \
             --libdir=lib/aarch64-linux-gnu \
             --buildtype=release \
-            -Dplatforms=wayland,x11 \
-            -Dgallium-drivers=freedreno,softpipe,llvmpipe,virgl \
+            -Dplatforms=x11,wayland \
+            -Dgallium-drivers=freedreno,zink,virgl,llvmpipe \
+            -Dgallium-va=disabled \
+            -Dgallium-mediafoundation=disabled \
             -Dvulkan-drivers=freedreno \
-            -Dgles1=disabled -Dgles2=enabled \
-            -Degl=enabled -Dgbm=enabled -Dopengl=true \
-            -Dllvm=enabled -Dshared-llvm=enabled \
+            -Dvulkan-layers= \
+            -Degl=enabled \
+            -Dgles2=enabled \
+            -Dglvnd=enabled \
+            -Dglx=dri \
+            -Dgles1=disabled \
+            -Dlibunwind=disabled \
+            -Dintel-rt=disabled \
+            -Dmicrosoft-clc=disabled \
+            -Dvalgrind=disabled \
+            -Dfreedreno-kmds=msm \
             -Dshader-cache=enabled \
-            -Dgallium-extra-hud=true \
-            -Dgallium-rusticl=false \
-            -Dvalgrind=disabled -Dlibunwind=disabled \
             -Dbuild-tests=false
-          ninja -C build
-          DESTDIR=${{ github.workspace }}/mesa-stage ninja -C build install
-          echo "mesa_version=$MESA_VER" >> $GITHUB_OUTPUT
+          ninja -C build/
+          DESTDIR=${{ github.workspace }}/mesa-stage ninja -C build/ install
 
       - name: "Package Mesa"
         run: |
-          MESA_VER=$(cd mesa && git describe --tags --always 2>/dev/null || echo "git")
           mkdir -p mesa-pkg/DEBIAN
           cp -r mesa-stage/usr mesa-pkg/
           if [ -d mesa-pkg/usr/lib/aarch64-linux-gnu ]; then
@@ -269,12 +274,12 @@ jobs:
           fi
           cat > mesa-pkg/DEBIAN/control << EOF
           Package: mesa-turnip
-          Version: ${MESA_VER}-1
+          Version: 26.2.0-1
           Architecture: arm64
-          Description: Mesa mainline with Turnip Vulkan + Freedreno (Adreno 740, LTO optimized)
+          Description: Mesa with Turnip Vulkan + Freedreno (Adreno 740, msm DRM)
           EOF
           dpkg-deb --build mesa-pkg
-          mv mesa-pkg.deb "mesa-turnip_${MESA_VER}_arm64.deb"
+          mv mesa-pkg.deb mesa-turnip_26.2.0_arm64.deb
 
       - name: "Upload"
         uses: actions/upload-artifact@v4

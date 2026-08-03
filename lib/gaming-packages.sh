@@ -292,31 +292,30 @@ install_mesa_from_source() {
     local mesa_version
     mesa_version=$(cd "$rootdir$build_dir/mesa" && git describe --tags --always 2>/dev/null || echo "git")
 
-    # Configure with meson — Turnip + Freedreno for Adreno 740
-    # Performance optimizations:
-    #   - release buildtype with b_lto for link-time optimization
-    #   - shader-cache for reduced stuttering
-    #   - draw-use-llvm=false (faster CPU-side, freedreno doesn't need it)
+    # Configure with meson — reference: lfdevs/mesa-for-android-container
+    # Adapted for bare-metal Linux (msm DRM) instead of Android (kgsl)
     chroot "$rootdir" bash -c "cd $src_dir && \
-        meson setup build \
+        meson setup build/ \
             --prefix=/usr \
             --libdir=lib \
             --buildtype=release \
-            -Dplatforms=wayland,x11 \
-            -Dgallium-drivers=freedreno,softpipe,llvmpipe,virgl \
+            -Dplatforms=x11,wayland \
+            -Dgallium-drivers=freedreno,zink,virgl,llvmpipe \
+            -Dgallium-va=disabled \
+            -Dgallium-mediafoundation=disabled \
             -Dvulkan-drivers=freedreno \
-            -Dgles1=disabled \
-            -Dgles2=enabled \
+            -Dvulkan-layers= \
             -Degl=enabled \
-            -Dgbm=enabled \
-            -Dopengl=true \
-            -Dllvm=enabled \
-            -Dshared-llvm=enabled \
-            -Dshader-cache=enabled \
-            -Dgallium-extra-hud=true \
-            -Dgallium-rusticl=false \
-            -Dvalgrind=disabled \
+            -Dgles2=enabled \
+            -Dglvnd=enabled \
+            -Dglx=dri \
+            -Dgles1=disabled \
             -Dlibunwind=disabled \
+            -Dintel-rt=disabled \
+            -Dmicrosoft-clc=disabled \
+            -Dvalgrind=disabled \
+            -Dfreedreno-kmds=msm \
+            -Dshader-cache=enabled \
             -Dbuild-tests=false" 2>/dev/null || {
         echo "Warning: Mesa meson setup failed" >&2
         return 1
