@@ -79,7 +79,7 @@ echo "============================================="
 # Step 1: Create image
 # ==========================================================================
 echo ""
-echo "[1/9] Creating rootfs image ($IMAGE_SIZE)..."
+echo "[1/10] Creating rootfs image ($IMAGE_SIZE)..."
 ROOTDIR="rootdir"
 create_image "$IMAGE_SIZE" "$ROOTFS_IMG" "$UUID"
 setup_chroot_mounts "$ROOTDIR"
@@ -89,7 +89,7 @@ trap_teardown "$ROOTDIR"
 # Step 2: Install Arch Linux ARM base system
 # ==========================================================================
 echo ""
-echo "[2/9] Installing Arch Linux ARM base system..."
+echo "[2/10] Installing Arch Linux ARM base system..."
 
 ARCH_TAR="ArchLinuxARM-aarch64-latest.tar.gz"
 
@@ -130,7 +130,7 @@ chroot "$ROOTDIR" pacman -Syu --noconfirm --needed
 # Step 3: Install kernel + firmware
 # ==========================================================================
 echo ""
-echo "[3/9] Installing kernel + firmware..."
+echo "[3/10] Installing kernel + firmware..."
 
 # Try injecting project kernel .deb/.rpm first
 INJECTED=0
@@ -220,17 +220,32 @@ rm -rf "$DEB_DIR"
 # Step 4: Install base system packages
 # ==========================================================================
 echo ""
-echo "[4/9] Installing base system packages..."
+echo "[4/10] Installing base system packages..."
 
 chroot "$ROOTDIR" pacman -S --noconfirm --needed \
     systemd sudo vim wget curl base-devel git xz \
     pciutils usbutils dialog yad xdg-user-dirs
 
 # ==========================================================================
-# Step 5: Install gaming components
+# Step 5: Create users (before gaming components, so chown works)
 # ==========================================================================
 echo ""
-echo "[5/9] Installing gaming components..."
+echo "[5/10] Creating users..."
+
+chroot "$ROOTDIR" useradd -m -s /bin/bash -G wheel,audio,video,input,storage "$USERNAME" 2>/dev/null || true
+printf '%s:%s\n' "$USERNAME" "$PASSWORD" | chroot "$ROOTDIR" chpasswd
+printf 'root:%s\n' "$PASSWORD" | chroot "$ROOTDIR" chpasswd
+
+echo "$HOSTNAME" > "$ROOTDIR/etc/hostname"
+echo "127.0.1.1 $HOSTNAME" >> "$ROOTDIR/etc/hosts"
+echo "%wheel ALL=(ALL:ALL) NOPASSWD: ***" > "$ROOTDIR/etc/sudoers.d/wheel"
+chmod 440 "$ROOTDIR/etc/sudoers.d/wheel"
+
+# ==========================================================================
+# Step 6: Install gaming components
+# ==========================================================================
+echo ""
+echo "[6/10] Installing gaming components..."
 
 # Gaming component installation — run in subshell to isolate errors
 (
@@ -293,21 +308,10 @@ echo "[5/9] Installing gaming components..."
 ) || echo "  (Some gaming components had non-fatal errors)"
 
 # ==========================================================================
-# Step 6: System configuration
+# Step 7: System configuration (users already created in Step 5)
 # ==========================================================================
 echo ""
-echo "[6/9] System configuration..."
-
-# Users
-chroot "$ROOTDIR" useradd -m -s /bin/bash -G wheel,audio,video,input,storage "$USERNAME" 2>/dev/null || true
-printf '%s:%s\n' "$USERNAME" "$PASSWORD" | chroot "$ROOTDIR" chpasswd
-printf 'root:%s\n' "$PASSWORD" | chroot "$ROOTDIR" chpasswd
-
-echo "$HOSTNAME" > "$ROOTDIR/etc/hostname"
-echo "127.0.1.1 $HOSTNAME" >> "$ROOTDIR/etc/hosts"
-
-echo "%wheel ALL=(ALL:ALL) NOPASSWD: ***" > "$ROOTDIR/etc/sudoers.d/wheel"
-chmod 440 "$ROOTDIR/etc/sudoers.d/wheel"
+echo "[7/10] System configuration..."
 
 # fstab
 echo "PARTLABEL=$PARTLABEL / ext4 defaults,noatime,errors=remount-ro 0 1" > "$ROOTDIR/etc/fstab"
@@ -354,19 +358,19 @@ else
 fi
 
 # ==========================================================================
-# Step 7: Configure gaming session
+# Step 8: Configure gaming session
 # ==========================================================================
 echo ""
-echo "[7/9] Configuring gaming session..."
+echo "[8/10] Configuring gaming session..."
 
 source "$SCRIPT_DIR/lib/gaming-packages.sh"
 setup_gaming_session "$ROOTDIR" "$LAUNCHER" "$DESKTOP" "$USERNAME"
 
 # ==========================================================================
-# Step 8: Cleanup
+# Step 9: Cleanup
 # ==========================================================================
 echo ""
-echo "[8/9] Cleaning up..."
+echo "[9/10] Cleaning up..."
 
 set +e
 chroot "$ROOTDIR" pacman -Scc --noconfirm 2>/dev/null
@@ -379,10 +383,10 @@ capture_package_list "$ROOTDIR" "$(pwd)/sheng-steamos_packages_${TIMESTAMP}.txt"
 teardown_mounts "$ROOTDIR" 2>/dev/null || true
 
 # ==========================================================================
-# Step 9: Package output
+# Step 10: Package output
 # ==========================================================================
 echo ""
-echo "[9/9] Packaging output..."
+echo "[10/10] Packaging output..."
 
 apply_fs_uuid "$UUID" "$ROOTFS_IMG"
 
