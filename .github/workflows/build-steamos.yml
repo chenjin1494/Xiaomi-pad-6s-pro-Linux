@@ -150,6 +150,76 @@ jobs:
           retention-days: 3
 
   # ==========================================================================
+  # Mesa from source (Turnip + Freedreno for Adreno 740)
+  # ==========================================================================
+  build-mesa:
+    name: "Build Mesa (Turnip)"
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: "Install Build Tools"
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential meson ninja-build python3-mako python3-yaml \
+            libdrm-dev libxml2-dev libx11-dev libxcb1-dev libxshmfence-dev \
+            libxrandr-dev libxdamage-dev libxfixes-dev libxxf86vm-dev \
+            xorgproto wayland-protocols libwayland-dev \
+            llvm-dev libelf-dev libexpat1-dev zlib1g-dev libzstd-dev \
+            vulkan-headers glslang-tools spirv-tools \
+            pkg-config cmake python3-packaging
+
+      - name: "Download Mesa Source"
+        run: |
+          wget -q https://mesa.freedesktop.org/archive/mesa-25.1.5.tar.xz
+          tar -xf mesa-25.1.5.tar.xz
+
+      - name: "Build Mesa"
+        run: |
+          cd mesa-25.1.5
+          meson setup build \
+            --prefix=/usr \
+            --libdir=lib/aarch64-linux-gnu \
+            --buildtype=release \
+            -Dplatforms=wayland,x11 \
+            -Dgallium-drivers=freedreno,swrast,virgl \
+            -Dvulkan-drivers=freedreno \
+            -Dgles1=disabled -Dgles2=enabled \
+            -Degl=enabled -Dgbm=enabled -Dopengl=true \
+            -Dllvm=enabled -Dshared-llvm=enabled \
+            -Dshader-cache=enabled \
+            -Dgallium-extra-hud=false -Dgallium-rusticl=false \
+            -Dgallium-va=disabled -Dgallium-vdpau=disabled \
+            -Dgallium-xa=disabled -Dva-api=disabled -Dvdpau=disabled \
+            -Dvalgrind=disabled -Dlibunwind=disabled -Dlmsensors=disabled \
+            -Dbuild-tests=false -Dtools=[] -Ddraw-use-llvm=false
+          ninja -C build
+          DESTDIR=${{ github.workspace }}/mesa-stage ninja -C build install
+
+      - name: "Package Mesa"
+        run: |
+          mkdir -p mesa-pkg/DEBIAN
+          cp -r mesa-stage/usr mesa-pkg/
+          # Move libs to Arch-compatible path
+          if [ -d mesa-pkg/usr/lib/aarch64-linux-gnu ]; then
+            cp -r mesa-pkg/usr/lib/aarch64-linux-gnu/* mesa-pkg/usr/lib/ 2>/dev/null || true
+          fi
+          cat > mesa-pkg/DEBIAN/control << EOF
+          Package: mesa-turnip
+          Version: 25.1.5-1
+          Architecture: arm64
+          Description: Mesa with Turnip Vulkan + Freedreno drivers (SM8550 Adreno 740)
+          EOF
+          dpkg-deb --build mesa-pkg
+          mv mesa-pkg.deb mesa-turnip_25.1.5-1_arm64.deb
+
+      - name: "Upload"
+        uses: actions/upload-artifact@v4
+        with:
+          name: mesa-turnip-deb
+          path: mesa-turnip_*.deb
+          retention-days: 7
+
+  # ==========================================================================
   # Device components (from debian-sheng, extracted into Arch rootfs)
   # ==========================================================================
   build-device-components:
@@ -356,6 +426,7 @@ jobs:
       - build-kernel
       - build-device-components
       - build-firmware-sensors
+      - build-mesa
     steps:
       - name: "Checkout"
         uses: actions/checkout@v4
@@ -389,6 +460,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: firmware-sensors-deb
+          path: lib/debs/
+
+      - name: "Download Mesa Turnip"
+        uses: actions/download-artifact@v4
+        with:
+          name: mesa-turnip-deb
           path: lib/debs/
 
       - name: "Verify .deb files"
@@ -466,8 +543,12 @@ jobs:
             | Architecture | Parallel component builds |
 
             ### Components
-            - Native ARM64 Steam client + Proton ARM64
-            - FEX-Emu (x86/x64 translation)
+            - **Mesa 25.1.5** (Turnip Vulkan + Freedreno, compiled from source)
+            - **Native ARM64 Steam** client + Proton ARM64
+            - **FEX-Emu** + **Box64** (x86/x64 translation)
+            - **Eden** (Nintendo Switch emulator, Yuzu fork)
+            - RetroArch + 20 cores, Dolphin, PPSSPP, mGBA, DOSBox, ScummVM
+            - Lutris, Heroic Games Launcher, Wine, GameMode, MangoHud
             - Gamescope compositor
             - Device: fastrpc, libssc, iio-sensor-proxy, sensors, devauth, firmware, ALSA
             - Touchscreen, stylus, fingerprint, keyboard, fast-charge

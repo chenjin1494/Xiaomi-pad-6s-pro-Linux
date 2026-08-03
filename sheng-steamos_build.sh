@@ -242,6 +242,11 @@ echo "[5/9] Installing gaming components..."
     install_mangohud "$ROOTDIR"
     install_controller_support "$ROOTDIR"
 
+    # Mesa from source (Turnip + Freedreno for Adreno 740)
+    echo ""
+    echo "  >>> Building Mesa from source (Turnip Vulkan + Freedreno)..."
+    install_mesa_from_source "$ROOTDIR"
+
     # x86/x64 emulation layers
     echo ""
     echo "  >>> Installing FEX-Emu (x86/x64 translation)..."
@@ -257,6 +262,11 @@ echo "[5/9] Installing gaming components..."
         echo "  >>> Installing Native ARM64 Steam + Proton ARM64..."
         install_steam "$ROOTDIR"
     fi
+
+    # Nintendo Switch emulator
+    echo ""
+    echo "  >>> Installing Eden (Nintendo Switch emulator)..."
+    install_eden "$ROOTDIR"
 
     # Emulators + gaming extras
     echo ""
@@ -408,8 +418,10 @@ echo "Components:"
 echo "  Base:         Arch Linux ARM"
 echo "  Desktop:      $DESKTOP"
 echo "  Launcher:     $LAUNCHER"
+echo "  GPU Driver:   Mesa 25.1.5 (Turnip Vulkan + Freedreno, from source)"
 echo "  x86 Layer:    FEX-Emu + Box64"
 echo "  Steam:        Native ARM64 + Proton ARM64"
+echo "  Switch:       Eden (Yuzu fork)"
 echo "  Emulators:    RetroArch, Dolphin, PPSSPP, mGBA, Mupen64Plus,"
 echo "                DOSBox, ScummVM, EmulationStation DE"
 echo "  Gaming:       GameMode, MangoHud, Lutris, Heroic, vkBasalt"
