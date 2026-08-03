@@ -192,6 +192,7 @@ SDEOF
 
     echo "Native ARM64 Steam + Proton + FEX installed"
     set -e
+    return 0
 }
 
 # ---------------------------------------------------------------------------
