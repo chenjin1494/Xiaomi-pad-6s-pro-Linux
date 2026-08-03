@@ -75,6 +75,16 @@ echo " User:     $USERNAME"
 echo " Output:   $OUTPUT_TYPE"
 echo "============================================="
 
+# Ensure mkbootimg is available
+if ! command -v mkbootimg &>/dev/null && [ ! -f ./mkbootimg ]; then
+    echo "Downloading mkbootimg..."
+    wget -nv -O mkbootimg "https://github.com/nicolerey/mkbootimg/raw/master/mkbootimg" 2>/dev/null || true
+    [ -f mkbootimg ] && chmod +x mkbootimg
+fi
+MKBOOTIMG=""
+command -v mkbootimg &>/dev/null && MKBOOTIMG="mkbootimg"
+[ -f ./mkbootimg ] && MKBOOTIMG="./mkbootimg"
+
 # ==========================================================================
 # Step 1: Create image
 # ==========================================================================
@@ -419,15 +429,47 @@ echo "[10/10] Packaging output..."
 
 apply_fs_uuid "$UUID" "$ROOTFS_IMG"
 
-# Always generate boot.img from rootfs
+# Generate boot.img from rootfs kernel files
 BOOT_IMG="sheng-steamos_boot_${TIMESTAMP}.img"
-echo "Generating boot.img from rootfs..."
-build_sheng_bootimg "$ROOTFS_IMG" "$BOOT_MODE" "$PARTLABEL" "$BOOT_IMG" 2>/dev/null && {
-    echo "  boot.img: $BOOT_IMG"
-} || {
-    echo "  Warning: boot.img generation skipped (mkbootimg not available or kernel not found)"
+echo "Generating boot.img..."
+if [ -n "$MKBOOTIMG" ]; then
+    # Extract kernel + DTB + initramfs from rootfs
+    MNT=$(mktemp -d)
+    mount -o loop,ro "$ROOTFS_IMG" "$MNT" 2>/dev/null || true
+
+    KERNEL_FILE=$(find "$MNT/boot" -maxdepth 1 -type f \( -name "vmlinuz*" -o -name "Image*" \) 2>/dev/null | head -1)
+    INITRD_FILE=$(find "$MNT/boot" -maxdepth 1 -type f -name "initramfs*" 2>/dev/null | head -1)
+    DTB_FILE=$(find "$MNT/boot" -maxdepth 1 -name "sm8550-xiaomi-sheng.dtb" 2>/dev/null | head -1)
+
+    if [ -n "$KERNEL_FILE" ]; then
+        TMPDIR=$(mktemp -d)
+        cp "$KERNEL_FILE" "$TMPDIR/kernel"
+        [ -n "$INITRD_FILE" ] && cp "$INITRD_FILE" "$TMPDIR/initrd.img"
+
+        # Append DTB to kernel if available
+        if [ -n "$DTB_FILE" ]; then
+            cat "$TMPDIR/kernel" "$DTB_FILE" > "$TMPDIR/kernel+dtb"
+            KERNEL_PAYLOAD="$TMPDIR/kernel+dtb"
+        else
+            KERNEL_PAYLOAD="$TMPDIR/kernel"
+        fi
+
+        MKBOOTIMG_CMD="$MKBOOTIMG --kernel \"$KERNEL_PAYLOAD\""
+        MKBOOTIMG_CMD+=" --cmdline \"root=PARTLABEL=$PARTLABEL rootwait console=tty0 console=ttyMSM0,115200n8\""
+        MKBOOTIMG_CMD+=" --base 0x00000000 --kernel_offset 0x00008000 --tags_offset 0x01e00000 --pagesize 4096"
+        [ -f "$TMPDIR/initrd.img" ] && MKBOOTIMG_CMD+=" --ramdisk \"$TMPDIR/initrd.img\" --ramdisk_offset 0x01000000"
+        MKBOOTIMG_CMD+=" -o \"$BOOT_IMG\""
+
+        eval "$MKBOOTIMG_CMD" && echo "  boot.img: $BOOT_IMG" || echo "  Warning: mkbootimg failed"
+        rm -rf "$TMPDIR"
+    else
+        echo "  Warning: No kernel found in rootfs"
+    fi
+    umount "$MNT" 2>/dev/null; rmdir "$MNT"
+else
+    echo "  Warning: mkbootimg not available, skipping boot.img"
     BOOT_IMG=""
-}
+fi
 
 case "$OUTPUT_TYPE" in
     image)

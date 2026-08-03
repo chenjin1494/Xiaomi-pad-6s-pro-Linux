@@ -371,11 +371,8 @@ jobs:
           TAG=$(gh release list --repo ianchb/sm8550-mainline --limit 1 --json tagName -q '.[0].tagName')
           echo "Kernel tag: $TAG"
           gh release download "$TAG" --repo ianchb/sm8550-mainline --pattern "linux-xiaomi-sheng*.deb" --clobber
-          gh release download "$TAG" --repo ianchb/sm8550-mainline --pattern "Image.gz-dtb_sheng" --clobber || true
-          gh release download "$TAG" --repo ianchb/sm8550-mainline --pattern "mkbootimg" --clobber || true
-          chmod +x mkbootimg 2>/dev/null || true
           echo "Downloaded:"
-          ls -lah *.deb Image.gz-dtb_sheng mkbootimg 2>/dev/null || true
+          ls -lah *.deb 2>/dev/null || true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -422,32 +419,6 @@ jobs:
             --hostname="${{ inputs.hostname }}" \
             --output=image \
             --mode=ci
-
-      - name: "Generate boot.img from rootfs"
-        run: |
-          PARTLABEL="${{ inputs.boot_mode == 'dual (linux)' && 'linux' || 'userdata' }}"
-          ROOTFS_IMG=$(ls *.img 2>/dev/null | head -1 || ls rootdir 2>/dev/null && echo rootdir || echo "")
-          # Find the rootfs image (before sparse conversion)
-          if [ -f "rootfs.img" ]; then
-            ROOTFS_IMG="rootfs.img"
-          elif [ -d "rootdir" ]; then
-            ROOTFS_IMG="rootdir"
-          fi
-          # Extract kernel + initramfs + DTB from rootfs for boot.img
-          if [ -f "Image.gz-dtb_sheng" ] && [ -f "mkbootimg" ]; then
-            PARTLABEL="${{ inputs.boot_mode == 'dual (linux)' && 'linux' || 'userdata' }}"
-            ./mkbootimg \
-              --kernel Image.gz-dtb_sheng \
-              --cmdline "root=PARTLABEL=$PARTLABEL rootwait console=tty0 console=ttyMSM0,115200n8" \
-              --base 0x00000000 \
-              --kernel_offset 0x00008000 \
-              --tags_offset 0x01e00000 \
-              --pagesize 4096 \
-              -o boot.img
-            echo "Generated boot.img (root=PARTLABEL=$PARTLABEL)"
-          else
-            echo "Warning: mkbootimg or Image.gz-dtb_sheng not found, skipping boot.img generation"
-          fi
 
       - name: "Upload RootFS"
         uses: actions/upload-artifact@v4
