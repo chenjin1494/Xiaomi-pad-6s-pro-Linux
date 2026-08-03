@@ -229,7 +229,8 @@ jobs:
             llvm-dev libelf-dev libexpat1-dev zlib1g-dev libzstd-dev \
             glslang-tools spirv-tools \
             libvulkan-dev \
-            pkg-config cmake bison flex python3-packaging
+            pkg-config cmake bison flex python3-packaging \
+            libglvnd-dev libxext-dev libxdamage-dev libxfixes-dev libxrandr-dev
           pip3 install --upgrade meson
 
       - name: "Clone Mesa (mainline)"
