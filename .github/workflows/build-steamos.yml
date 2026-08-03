@@ -1,9 +1,5 @@
 # =============================================================================
-# Build SteamOS (debootstrap + 并行 .deb 组件构建)
-# =============================================================================
-# 参�?debian-sheng 架构:
-#   1. 并行 Job 构建各组�?.deb
-#   2. 最�?Job �?debootstrap 创建基础系统 + 安装所�?.deb
+# Build SteamOS (debootstrap + parallel .deb component builds)
 # =============================================================================
 
 name: Build SteamOS
@@ -12,64 +8,64 @@ on:
   workflow_dispatch:
     inputs:
       suite:
-        description: 'Debian 版本'
+        description: 'Debian version'
         type: choice
         options: [trixie, forky]
         default: 'trixie'
       desktop:
-        description: '桌面环境'
+        description: 'Desktop Environment'
         type: choice
         options: [gamescope, kde, gnome, server]
         default: 'gamescope'
       launcher:
-        description: '游戏启动�?
+        description: 'Game Launcher'
         type: choice
         options: [steam, both, retroarch]
         default: 'steam'
       boot_mode:
-        description: '启动模式'
+        description: 'Boot Mode'
         type: choice
         options: ['dual (linux)', 'single (userdata)']
         default: 'dual (linux)'
       autologin:
-        description: '自动登录'
+        description: 'Autologin'
         type: boolean
         default: true
       username:
-        description: '用户�?
+        description: 'Username'
         type: string
         default: 'gamer'
       hostname:
-        description: '主机�?
+        description: 'Hostname'
         type: string
         default: 'sheng-steamos'
       kernel_source:
-        description: '内核来源'
+        description: 'Kernel Source'
         type: choice
         options: [prebuilt, custom_build]
         default: 'prebuilt'
       kernel_repo:
-        description: '内核仓库 (custom_build)'
+        description: 'Kernel Repo URL (custom_build)'
         type: string
         default: 'https://github.com/ianchb/sm8550-mainline'
       kernel_branch:
-        description: '内核分支 (custom_build)'
+        description: 'Kernel Branch (custom_build)'
         type: string
         default: 'sheng-7.1.5'
       kernel_config:
-        description: '内核配置文件 (custom_build)'
+        description: 'Kernel Config (custom_build)'
         type: string
         default: 'sm8550.config'
       firmware_repo:
-        description: '固件仓库'
+        description: 'Firmware Repo URL'
         type: string
         default: 'https://github.com/ianchb/sheng-firmware'
       firmware_branch:
-        description: '固件分支'
+        description: 'Firmware Branch'
         type: string
         default: 'master'
       skip_release:
-        description: '跳过创建 Release'
+        description: 'Skip Release'
         type: boolean
         default: false
   push:
@@ -87,21 +83,18 @@ concurrency:
 permissions:
   contents: write
 
-# =============================================================================
-# 并行组件构建 Jobs
-# =============================================================================
 jobs:
 
-  # ---------------------------------------------------------------------------
-  # 内核 (可�? 自定义编�?
-  # ---------------------------------------------------------------------------
+  # ==========================================================================
+  # Kernel (optional: custom build)
+  # ==========================================================================
   build-kernel:
     name: "Build Kernel"
     runs-on: ubuntu-24.04-arm
     steps:
       - name: "Skip (Prebuilt)"
         if: ${{ inputs.kernel_source != 'custom_build' }}
-        run: echo "�?使用预编译内核，跳过构建"
+        run: echo "Using prebuilt kernel, skipped"
 
       - name: "Checkout"
         if: ${{ inputs.kernel_source == 'custom_build' }}
@@ -111,9 +104,7 @@ jobs:
         if: ${{ inputs.kernel_source == 'custom_build' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential flex bison libssl-dev libelf-dev bc \
-            ccache clang llvm lld
+          sudo apt-get install -y build-essential flex bison libssl-dev libelf-dev bc ccache clang llvm lld
 
       - name: "Restore ccache"
         if: ${{ inputs.kernel_source == 'custom_build' }}
@@ -129,23 +120,17 @@ jobs:
           git clone "${{ inputs.kernel_repo }}" --branch "${{ inputs.kernel_branch }}" --depth 1 linux
           cp "${{ inputs.kernel_config }}" linux/.config
           cd linux
-          export CCACHE_DIR=/home/runner/.ccache
-          export PATH="/usr/lib/ccache:$PATH"
-          export CC="ccache clang"
+          export CCACHE_DIR=/home/runner/.ccache PATH="/usr/lib/ccache:$PATH"
+          export CC="ccache clang" CXX="ccache clang++"
           make -j$(nproc) ARCH=arm64 LLVM=1
           KVER="$(make kernelrelease -s)"
           echo "kernel_version=$KVER" >> $GITHUB_OUTPUT
-
-          make -j$(nproc) ARCH=arm64 LLVM=1 \
-            INSTALL_MOD_PATH="${{ github.workspace }}/linux-xiaomi-sheng" modules_install
+          make -j$(nproc) ARCH=arm64 LLVM=1 INSTALL_MOD_PATH="${{ github.workspace }}/linux-xiaomi-sheng" modules_install
           rm -rf "${{ github.workspace }}/linux-xiaomi-sheng/lib/modules/"*"/build"
-
           mkdir -p "${{ github.workspace }}/linux-xiaomi-sheng/boot"
           install -Dm644 arch/arm64/boot/Image.gz "${{ github.workspace }}/linux-xiaomi-sheng/boot/Image.gz"
           install -Dm644 arch/arm64/boot/dts/qcom/sm8550-xiaomi-sheng.dtb "${{ github.workspace }}/linux-xiaomi-sheng/boot/sm8550-xiaomi-sheng.dtb"
-
-          cat arch/arm64/boot/Image.gz arch/arm64/boot/dts/qcom/sm8550-xiaomi-sheng.dtb \
-            > "${{ github.workspace }}/Image.gz-dtb_sheng"
+          cat arch/arm64/boot/Image.gz arch/arm64/boot/dts/qcom/sm8550-xiaomi-sheng.dtb > "${{ github.workspace }}/Image.gz-dtb_sheng"
 
       - name: "Package Kernel .deb"
         if: ${{ inputs.kernel_source == 'custom_build' }}
@@ -177,9 +162,9 @@ jobs:
           path: Image.gz-dtb_sheng
           retention-days: 3
 
-  # ---------------------------------------------------------------------------
-  # fastrpc �?Qualcomm FastRPC
-  # ---------------------------------------------------------------------------
+  # ==========================================================================
+  # fastrpc - Qualcomm FastRPC
+  # ==========================================================================
   build-fastrpc:
     name: "Build fastrpc"
     runs-on: ubuntu-24.04-arm
@@ -228,8 +213,9 @@ jobs:
           path: fastrpc_*.deb
           retention-days: 3
 
-  # ---------------------------------------------------------------------------
-  # libssc �?高通传感器核心�?  # ---------------------------------------------------------------------------
+  # ==========================================================================
+  # libssc - Qualcomm Sensor Core
+  # ==========================================================================
   build-libssc:
     name: "Build libssc"
     runs-on: ubuntu-24.04-arm
@@ -274,9 +260,9 @@ jobs:
           path: libssc_*.deb
           retention-days: 3
 
-  # ---------------------------------------------------------------------------
-  # iio-sensor-proxy (依赖 libssc)
-  # ---------------------------------------------------------------------------
+  # ==========================================================================
+  # iio-sensor-proxy (depends on libssc)
+  # ==========================================================================
   build-iio-sensor-proxy:
     name: "Build iio-sensor-proxy"
     runs-on: ubuntu-24.04-arm
@@ -327,8 +313,9 @@ jobs:
           path: iio-sensor-proxy_*.deb
           retention-days: 3
 
-  # ---------------------------------------------------------------------------
-  # sheng-sensors �?传感器配置文�?  # ---------------------------------------------------------------------------
+  # ==========================================================================
+  # sheng-sensors - sensor config files
+  # ==========================================================================
   build-sheng-sensors:
     name: "Build sheng-sensors"
     runs-on: ubuntu-24.04-arm
@@ -356,9 +343,9 @@ jobs:
           path: sheng-sensors_*.deb
           retention-days: 3
 
-  # ---------------------------------------------------------------------------
-  # sheng-devauth �?键盘认证守护进程
-  # ---------------------------------------------------------------------------
+  # ==========================================================================
+  # sheng-devauth - keyboard auth daemon
+  # ==========================================================================
   build-sheng-devauth:
     name: "Build sheng-devauth"
     runs-on: ubuntu-24.04-arm
@@ -391,9 +378,9 @@ jobs:
           path: sheng-devauth_*.deb
           retention-days: 3
 
-  # ---------------------------------------------------------------------------
-  # 固件 + ALSA (inline 打包)
-  # ---------------------------------------------------------------------------
+  # ==========================================================================
+  # Firmware + ALSA (inline packaging)
+  # ==========================================================================
   build-firmware-alsa:
     name: "Build firmware & ALSA"
     runs-on: ubuntu-24.04-arm
@@ -410,8 +397,7 @@ jobs:
           dpkg-deb --build --root-owner-group firmware-xiaomi-sheng
 
       - name: "Package ALSA"
-        run: |
-          dpkg-deb --build --root-owner-group alsa-xiaomi-sheng
+        run: dpkg-deb --build --root-owner-group alsa-xiaomi-sheng
 
       - name: "Download external .debs"
         run: |
@@ -429,12 +415,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: firmware-alsa-deb
-          path: |
-            *.deb
+          path: "*.deb"
           retention-days: 3
 
-  # ---------------------------------------------------------------------------
-  # RootFS 组装 �?收集所�?.deb，debootstrap 构建最终镜�?  # ---------------------------------------------------------------------------
+  # ==========================================================================
+  # RootFS Assembly - debootstrap + install all .debs
+  # ==========================================================================
   build-rootfs:
     name: "Build RootFS"
     runs-on: ubuntu-24.04-arm
@@ -459,12 +445,11 @@ jobs:
         id: boot
         run: |
           case "${{ inputs.boot_mode }}" in
-            'dual (linux)')   echo "label=linux" >> $GITHUB_OUTPUT ;;
+            'dual (linux)')      echo "label=linux" >> $GITHUB_OUTPUT ;;
             'single (userdata)') echo "label=userdata" >> $GITHUB_OUTPUT ;;
           esac
 
-      # ---- 下载所有组�?.deb ----
-      - name: "Download kernel"
+      - name: "Download kernel (prebuilt)"
         if: ${{ inputs.kernel_source == 'prebuilt' }}
         run: |
           TAG=$(gh release list --repo ianchb/sm8550-mainline --limit 1 --json tagName -q '.[0].tagName')
@@ -484,23 +469,14 @@ jobs:
           pattern: "*-deb"
           merge-multiple: true
 
-      - name: "Download firmware & ALSA"
-        uses: actions/download-artifact@v4
-        with:
-          name: firmware-alsa-deb
-
       - name: "Verify .deb files"
         run: |
-          echo "=== 已收集的 .deb �?==="
-          ls -lah *.deb 2>/dev/null || echo "(�?.deb 文件!)"
+          echo "=== Collected .deb packages ==="
+          ls -lah *.deb 2>/dev/null || echo "(none!)"
 
-      # ---- 构建 RootFS ----
       - name: "Build SteamOS Image"
-        id: build
         run: |
-          PARTLABEL="${{ steps.boot.outputs.label }}"
           chmod +x sheng-steamos_build.sh lib/*.sh
-
           sudo bash sheng-steamos_build.sh \
             --suite="${{ inputs.suite }}" \
             --desktop="${{ inputs.desktop }}" \
@@ -512,28 +488,19 @@ jobs:
             --output=image \
             --mode=ci
 
-          # 收集产物
-          ls -lah *.7z *.img 2>/dev/null || true
-          echo "build_done=true" >> $GITHUB_OUTPUT
-
-      # ---- 生成 boot.img (自定义内�? ----
       - name: "Generate boot.img (custom kernel)"
         if: ${{ inputs.kernel_source == 'custom_build' }}
         run: |
           PARTLABEL="${{ steps.boot.outputs.label }}"
-          chmod +x mkbootimg 2>/dev/null || true
           if [ -f mkbootimg ] && [ -f Image.gz-dtb_sheng ]; then
+            chmod +x mkbootimg
             ./mkbootimg \
               --kernel Image.gz-dtb_sheng \
               --cmdline "root=PARTLABEL=$PARTLABEL rootwait" \
-              --base 0x00000000 \
-              --kernel_offset 0x00008000 \
-              --tags_offset 0x01e00000 \
-              --pagesize 4096 \
-              -o boot.img
+              --base 0x00000000 --kernel_offset 0x00008000 --tags_offset 0x01e00000 \
+              --pagesize 4096 -o boot.img
           fi
 
-      # ---- 上传产物 ----
       - name: "Upload RootFS"
         uses: actions/upload-artifact@v4
         with:
@@ -542,7 +509,7 @@ jobs:
           retention-days: 14
           compression-level: 1
 
-      - name: "Upload Boot Image"
+      - name: "Upload Boot"
         uses: actions/upload-artifact@v4
         with:
           name: steamos-boot
@@ -558,9 +525,9 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # ---------------------------------------------------------------------------
-  # 创建 Release
-  # ---------------------------------------------------------------------------
+  # ==========================================================================
+  # Create Release
+  # ==========================================================================
   create-release:
     name: "Create Release"
     runs-on: ubuntu-24.04-arm
@@ -585,22 +552,23 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: "SteamOS ${{ steps.tag.outputs.tag }}"
           body: |
-            **SteamOS 风格游戏系统 (Debian ${{ inputs.suite }} arm64)**
+            **SteamOS Gaming System (Debian ${{ inputs.suite }} arm64)**
 
-            | 项目 | 详情 |
-            |------|------|
-            | 基础系统 | Debian ${{ inputs.suite }} (debootstrap) |
-            | 桌面 | ${{ inputs.desktop }} |
-            | 启动�?| ${{ inputs.launcher }} |
-            | 启动模式 | ${{ inputs.boot_mode }} |
-            | 架构 | 并行 .deb 组件构建 + debootstrap 组装 |
+            | Item | Detail |
+            |------|--------|
+            | Base | Debian ${{ inputs.suite }} (debootstrap) |
+            | Desktop | ${{ inputs.desktop }} |
+            | Launcher | ${{ inputs.launcher }} |
+            | Boot | ${{ inputs.boot_mode }} |
+            | Arch | Parallel .deb builds + debootstrap assembly |
 
-            ### 组件
-            - 原生 ARM64 Steam 客户�?+ Proton ARM64
-            - FEX-Emu (x86/x64 转译)
-            - Gamescope 微合成器
-            - 设备专用: fastrpc, libssc, iio-sensor-proxy, sensors, devauth, firmware, ALSA
-            - 触摸屏、手写笔、指纹、键盘、快充支�?          files: |
+            ### Components
+            - Native ARM64 Steam client + Proton ARM64
+            - FEX-Emu (x86/x64 translation)
+            - Gamescope compositor
+            - Device: fastrpc, libssc, iio-sensor-proxy, sensors, devauth, firmware, ALSA
+            - Touchscreen, stylus, fingerprint, keyboard, fast-charge support
+          files: |
             *.7z
             boot*.img
           draft: true
