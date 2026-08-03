@@ -74,7 +74,14 @@ install_steam() {
         echo "Error: Failed to download ARM64 Steam client" >&2
         return 1
     }
-    bsdtar -xf "/tmp/$steam_zip" -C "$steam_dir/"
+    if file "/tmp/$steam_zip" | grep -q 'Zip archive\|data' 2>/dev/null; then
+        bsdtar -xf "/tmp/$steam_zip" -C "$steam_dir/" || {
+            echo "Warning: bsdtar extraction failed, trying unzip..."
+            unzip -o "/tmp/$steam_zip" -d "$steam_dir/" 2>/dev/null || true
+        }
+    else
+        echo "Warning: Downloaded file is not a valid zip" >&2
+    fi
     rm -f "/tmp/$steam_zip"
 
     # Beta channel
@@ -94,9 +101,14 @@ install_steam() {
         echo "Warning: Failed to download Proton ARM64" >&2
     }
     if [ -f "/tmp/$proton_tar" ]; then
-        tar -xf "/tmp/$proton_tar" -C "$compat_dir/"
+        # Verify it's a valid tar file
+        if file "/tmp/$proton_tar" | grep -q 'tar archive' 2>/dev/null; then
+            tar -xf "/tmp/$proton_tar" -C "$compat_dir/"
+            echo "  Proton ARM64 installed"
+        else
+            echo "  Warning: Downloaded file is not a valid tar, skipping Proton ARM64" >&2
+        fi
         rm -f "/tmp/$proton_tar"
-        echo "  Proton ARM64 installed"
     fi
 
     # ---- SDK symlink ----
