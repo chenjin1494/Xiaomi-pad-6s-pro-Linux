@@ -371,8 +371,9 @@ jobs:
           TAG=$(gh release list --repo ianchb/sm8550-mainline --limit 1 --json tagName -q '.[0].tagName')
           echo "Kernel tag: $TAG"
           gh release download "$TAG" --repo ianchb/sm8550-mainline --pattern "linux-xiaomi-sheng*.deb" --clobber
+          gh release download "$TAG" --repo ianchb/sm8550-mainline --pattern "boot_sheng_*.img" --clobber
           echo "Downloaded:"
-          ls -lah *.deb 2>/dev/null || true
+          ls -lah *.deb *.img 2>/dev/null || true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
