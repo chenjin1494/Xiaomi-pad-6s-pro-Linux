@@ -246,7 +246,7 @@ jobs:
             --buildtype=release \
             -Db_lto=true \
             -Dplatforms=wayland,x11 \
-            -Dgallium-drivers=freedreno,swrast,virgl \
+            -Dgallium-drivers=freedreno,softpipe,llvmpipe,virgl \
             -Dvulkan-drivers=freedreno \
             -Dgles1=disabled -Dgles2=enabled \
             -Degl=enabled -Dgbm=enabled -Dopengl=true \

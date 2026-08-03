@@ -305,7 +305,7 @@ install_mesa_from_source() {
             -Db_lto=true \
             -Db_pgo=off \
             -Dplatforms=wayland,x11 \
-            -Dgallium-drivers=freedreno,swrast,virgl \
+            -Dgallium-drivers=freedreno,softpipe,llvmpipe,virgl \
             -Dvulkan-drivers=freedreno \
             -Dgles1=disabled \
             -Dgles2=enabled \
