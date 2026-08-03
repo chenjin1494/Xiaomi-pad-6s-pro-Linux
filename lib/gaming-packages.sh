@@ -302,8 +302,6 @@ install_mesa_from_source() {
             --prefix=/usr \
             --libdir=lib \
             --buildtype=release \
-            -Db_lto=true \
-            -Db_pgo=off \
             -Dplatforms=wayland,x11 \
             -Dgallium-drivers=freedreno,softpipe,llvmpipe,virgl \
             -Dvulkan-drivers=freedreno \

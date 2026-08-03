@@ -244,7 +244,6 @@ jobs:
             --prefix=/usr \
             --libdir=lib/aarch64-linux-gnu \
             --buildtype=release \
-            -Db_lto=true \
             -Dplatforms=wayland,x11 \
             -Dgallium-drivers=freedreno,softpipe,llvmpipe,virgl \
             -Dvulkan-drivers=freedreno \
