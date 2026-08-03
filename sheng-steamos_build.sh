@@ -183,10 +183,12 @@ done
 DEB_COUNT=$(ls -1 "$DEB_DIR"/*.deb 2>/dev/null | wc -l)
 if [ "$DEB_COUNT" -gt 0 ]; then
     echo "  Found $DEB_COUNT .deb packages, extracting..."
+    set +o pipefail
     for deb in "$DEB_DIR"/*.deb; do
         echo "    -> $(basename "$deb")"
-        dpkg-deb --fsys-tarfile "$deb" | tar -x --keep-directory-symlink -C "$ROOTDIR/" 2>/dev/null || true
+        dpkg-deb --fsys-tarfile "$deb" 2>/dev/null | tar -x --keep-directory-symlink --warning=no-unknown-keyword -C "$ROOTDIR/" 2>/dev/null || true
     done
+    set -o pipefail
     # Run postinst scripts
     for deb in "$DEB_DIR"/*.deb; do
         pkg_name=$(dpkg-deb -f "$deb" Package 2>/dev/null || echo "")
