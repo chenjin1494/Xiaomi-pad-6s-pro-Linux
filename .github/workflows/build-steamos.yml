@@ -164,7 +164,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential autoconf automake libtool \
             pkg-config libyaml-dev linux-libc-dev ninja-build python3-pip \
-            libglib2.0-dev libprotobuf-c-dev libqmi-glib-dev libmbim-glib-dev \
+            libglib2.0-dev libgudev-1.0-dev libpolkit-gobject-1-dev \
+            libprotobuf-c-dev libqmi-glib-dev libmbim-glib-dev \
             protobuf-compiler protobuf-c-compiler dpkg-dev
           pip3 install --upgrade meson
 
