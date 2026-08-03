@@ -25,6 +25,9 @@ install_gaming_base() {
         bluez bluez-utils \
         nss wget curl git base-devel
 
+    # Weston as fallback compositor
+    chroot "$rootdir" pacman -S --noconfirm --needed weston xterm 2>/dev/null || true
+
     chroot "$rootdir" systemctl --global enable pipewire pipewire-pulse wireplumber 2>/dev/null || true
     chroot "$rootdir" systemctl enable NetworkManager bluetooth 2>/dev/null || true
 
@@ -166,18 +169,37 @@ else
         FEXBash steam -tenfoot -fulldesktopres -gamepadui -steamos3 2>&1 | tee -a "$LOGFILE"
 fi
 
-# If Gamescope exits, show error and wait
+# If Gamescope exits, fall back to Weston desktop
 EXIT_CODE=$?
 echo "[$(date)] Gamescope exited with code $EXIT_CODE" | tee -a "$LOGFILE"
 echo ""
 echo "========================================"
 echo " Game Mode exited (code: $EXIT_CODE)"
+echo " Falling back to Weston desktop..."
 echo " Log: $LOGFILE"
-echo ""
-echo " Switch to TTY2 (Ctrl+Alt+F2) to debug"
-echo " Or run: sudo systemctl start desktop-mode"
 echo "========================================"
-sleep 30
+sleep 2
+
+# Fallback: Weston desktop
+export XDG_RUNTIME_DIR=/run/user/1000
+for i in $(seq 1 10); do
+    [ -e /dev/dri/card0 ] && break
+    sleep 1
+done
+
+if command -v weston &>/dev/null; then
+    echo "[$(date)] Starting Weston fallback" | tee -a "$LOGFILE"
+    weston --shell=kiosk --tty=1 --socket=wayland-1 2>&1 | tee -a "$LOGFILE"
+else
+    echo "[$(date)] Weston not found, trying cage" | tee -a "$LOGFILE"
+    if command -v cage &>/dev/null; then
+        cage -- xterm 2>&1 | tee -a "$LOGFILE"
+    else
+        echo "[$(date)] No fallback compositor available" | tee -a "$LOGFILE"
+        echo "Switch to TTY2 (Ctrl+Alt+F2) to debug"
+        sleep 60
+    fi
+fi
 STEOF
     chmod +x "$rootdir/usr/local/bin/steam-gamemode"
 
