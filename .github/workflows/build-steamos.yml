@@ -159,26 +159,29 @@ jobs:
       - name: "Checkout video-driver"
         run: git clone --depth=1 https://github.com/qualcomm-linux/video-driver.git
 
-      - name: "Download kernel headers"
-        run: |
-          TAG=$(gh release list --repo ianchb/sm8550-mainline --limit 1 --json tagName -q '.[0].tagName')
-          gh release download "$TAG" --repo ianchb/sm8550-mainline --pattern "linux-xiaomi-sheng*.deb" --clobber
-          sudo dpkg -i linux-xiaomi-sheng*.deb
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: "Clone kernel source"
+        run: git clone --depth=1 --branch sheng-7.1.5 https://github.com/ianchb/sm8550-mainline.git kernel-src
 
       - name: "Build kernel module"
         run: |
-          KVER=$(ls /lib/modules/ | sort -V | tail -1)
+          cd kernel-src
+          # Use existing config if available, otherwise use defconfig
+          if [ -f ../linux-xiaomi-sheng*.deb ]; then
+            dpkg-deb -x ../linux-xiaomi-sheng*.deb /tmp/kdeb/
+            cp /tmp/kdeb/boot/config-* .config 2>/dev/null || make ARCH=arm64 defconfig
+          else
+            make ARCH=arm64 defconfig
+          fi
+          # Prepare kernel headers
+          make ARCH=arm64 modules_prepare -j$(nproc)
+          KVER=$(make ARCH=arm64 kernelrelease -s)
           echo "Kernel version: $KVER"
-          cd video-driver
-          export KERNEL_SRC=/lib/modules/$KVER/build
+          cd ../video-driver
+          export KERNEL_SRC=${{ github.workspace }}/kernel-src
           export CONFIG_MSM_VIDC_PINEAPPLE=y
           make -j$(nproc) modules
-          # Install to staging dir
           mkdir -p ../video-driver-stage/lib/modules/$KVER/extra
-          cp *.ko ../video-driver-stage/lib/modules/$KVER/extra/ 2>/dev/null || true
-          find driver -name '*.ko' -exec cp {} ../video-driver-stage/lib/modules/$KVER/extra/ \;
+          find . -name '*.ko' -exec cp {} ../video-driver-stage/lib/modules/$KVER/extra/ \; 2>/dev/null
 
       - name: "Package"
         run: |
@@ -221,10 +224,11 @@ jobs:
             build-essential meson ninja-build python3-mako python3-yaml \
             libdrm-dev libxml2-dev libx11-dev libxcb1-dev libxshmfence-dev \
             libxrandr-dev libxdamage-dev libxfixes-dev libxxf86vm-dev \
-            xorgproto wayland-protocols libwayland-dev \
+            wayland-protocols libwayland-dev \
             llvm-dev libelf-dev libexpat1-dev zlib1g-dev libzstd-dev \
-            vulkan-headers glslang-tools spirv-tools \
-            pkg-config cmake python3-packaging
+            glslang-tools spirv-tools \
+            libvulkan-dev \
+            pkg-config cmake python3-packaging bison flex
 
       - name: "Clone Mesa (mainline)"
         run: git clone --depth=1 https://gitlab.freedesktop.org/mesa/mesa.git
