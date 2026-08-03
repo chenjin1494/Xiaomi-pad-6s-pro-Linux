@@ -232,37 +232,37 @@ chroot "$ROOTDIR" pacman -S --noconfirm --needed \
 echo ""
 echo "[5/9] Installing gaming components..."
 
-source "$SCRIPT_DIR/lib/gaming-packages.sh"
+# Gaming component installation — run in subshell to isolate errors
+(
+    set +e
+    source "$SCRIPT_DIR/lib/gaming-packages.sh"
 
-# Gaming component installation — disable set -e for robustness
-set +e
+    install_gaming_base "$ROOTDIR"
+    install_gamescope "$ROOTDIR"
+    install_mangohud "$ROOTDIR"
+    install_controller_support "$ROOTDIR"
 
-install_gaming_base "$ROOTDIR"
-install_gamescope "$ROOTDIR"
-install_mangohud "$ROOTDIR"
-install_controller_support "$ROOTDIR"
+    if [ "$LAUNCHER" = "steam" ] || [ "$LAUNCHER" = "both" ]; then
+        echo ""
+        echo "  >>> Installing Native ARM64 Steam + Proton ARM64 + FEX-Emu..."
+        install_steam "$ROOTDIR"
+    fi
 
-if [ "$LAUNCHER" = "steam" ] || [ "$LAUNCHER" = "both" ]; then
-    echo ""
-    echo "  >>> Installing Native ARM64 Steam + Proton ARM64 + FEX-Emu..."
-    install_steam "$ROOTDIR"
-fi
+    if [ "$LAUNCHER" = "retroarch" ] || [ "$LAUNCHER" = "both" ]; then
+        echo ""
+        echo "  >>> Installing RetroArch + EmulationStation..."
+        install_retroarch "$ROOTDIR"
+        install_emulationstation "$ROOTDIR"
+    fi
 
-if [ "$LAUNCHER" = "retroarch" ] || [ "$LAUNCHER" = "both" ]; then
-    echo ""
-    echo "  >>> Installing RetroArch + EmulationStation..."
-    install_retroarch "$ROOTDIR"
-    install_emulationstation "$ROOTDIR"
-fi
+    if [ "$DESKTOP" = "kde" ] || [ "$DESKTOP" = "gnome" ]; then
+        echo ""
+        echo "  >>> Installing Desktop Mode ($DESKTOP)..."
+        install_desktop_mode "$ROOTDIR" "$DESKTOP"
+    fi
 
-if [ "$DESKTOP" = "kde" ] || [ "$DESKTOP" = "gnome" ]; then
-    echo ""
-    echo "  >>> Installing Desktop Mode ($DESKTOP)..."
-    install_desktop_mode "$ROOTDIR" "$DESKTOP"
-fi
-
-true  # Reset exit status before re-enabling set -e
-set -e
+    exit 0
+) || echo "  (Some gaming components had non-fatal errors)"
 
 # ==========================================================================
 # Step 6: System configuration
@@ -331,6 +331,7 @@ fi
 echo ""
 echo "[7/9] Configuring gaming session..."
 
+source "$SCRIPT_DIR/lib/gaming-packages.sh"
 setup_gaming_session "$ROOTDIR" "$LAUNCHER" "$DESKTOP" "$USERNAME"
 
 # ==========================================================================
