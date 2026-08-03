@@ -426,6 +426,16 @@ jobs:
           retention-days: 14
           compression-level: 1
 
+      - name: "Upload Boot Images"
+        uses: actions/upload-artifact@v4
+        with:
+          name: steamos-boot
+          path: |
+            boot_sheng_*.img
+            sheng-steamos_boot_*.img
+          retention-days: 14
+          if-no-files-found: ignore
+
       - name: "Upload Package List"
         uses: actions/upload-artifact@v4
         with:
@@ -450,6 +460,13 @@ jobs:
       - name: "Download RootFS"
         uses: actions/download-artifact@v4
         with: { name: steamos-rootfs }
+
+      - name: "Download Boot Images"
+        uses: actions/download-artifact@v4
+        with:
+          name: steamos-boot
+          merge-multiple: true
+        continue-on-error: true
 
       - name: "Create Release"
         uses: softprops/action-gh-release@v2
@@ -477,7 +494,10 @@ jobs:
             - Gamescope compositor
             - Device: fastrpc, libssc, iio-sensor-proxy, sensors, devauth, firmware, ALSA
             - Touchscreen, stylus, fingerprint, keyboard, fast-charge
-          files: "*.7z"
+          files: |
+            *.7z
+            boot_sheng_*.img
+            sheng-steamos_boot_*.img
           draft: true
           prerelease: true
         env:

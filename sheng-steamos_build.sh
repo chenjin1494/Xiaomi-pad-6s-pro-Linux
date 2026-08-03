@@ -386,6 +386,16 @@ echo "[9/9] Packaging output..."
 
 apply_fs_uuid "$UUID" "$ROOTFS_IMG"
 
+# Always generate boot.img from rootfs
+BOOT_IMG="sheng-steamos_boot_${TIMESTAMP}.img"
+echo "Generating boot.img from rootfs..."
+build_sheng_bootimg "$ROOTFS_IMG" "$BOOT_MODE" "$PARTLABEL" "$BOOT_IMG" 2>/dev/null && {
+    echo "  boot.img: $BOOT_IMG"
+} || {
+    echo "  Warning: boot.img generation skipped (mkbootimg not available or kernel not found)"
+    BOOT_IMG=""
+}
+
 case "$OUTPUT_TYPE" in
     image)
         echo "Converting to sparse image..."
@@ -393,6 +403,7 @@ case "$OUTPUT_TYPE" in
         echo ""
         echo "============================================="
         echo " Done: sheng-steamos_${LAUNCHER}_${TIMESTAMP}.7z"
+        [ -n "$BOOT_IMG" ] && echo " Boot: $BOOT_IMG"
         echo "============================================="
         ;;
     sd)
