@@ -230,7 +230,6 @@ jobs:
             glslang-tools spirv-tools \
             libvulkan-dev \
             pkg-config cmake python3-packaging bison flex
-            libwayland-egl-backend-dev libwayland-egl1-mesa-dev
           pip3 install --upgrade meson
 
       - name: "Clone Mesa (mainline)"
