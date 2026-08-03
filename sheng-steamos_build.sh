@@ -92,15 +92,18 @@ echo ""
 echo "[2/9] Installing Arch Linux ARM base system..."
 
 ARCH_TAR="ArchLinuxARM-aarch64-latest.tar.gz"
-ARCH_MIRROR="https://mirrors.tuna.tsinghua.edu.cn/archlinux-arm/os/aarch64"
 
 if [ ! -f "$ARCH_TAR" ]; then
     echo "Downloading Arch Linux ARM aarch64 rootfs..."
-    wget -nv -O "$ARCH_TAR" "${ARCH_MIRROR}/ArchLinuxARM-aarch64-latest.tar.gz" || {
-        wget -nv -O "$ARCH_TAR" \
-            "https://mirrors.ustc.edu.cn/archlinuxarm/os/aarch64/ArchLinuxARM-aarch64-latest.tar.gz" || {
-            echo "Error: Download failed" >&2; exit 1
-        }
+    wget -nv -O "$ARCH_TAR" \
+        "http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz" || \
+    wget -nv -O "$ARCH_TAR" \
+        "http://mirror.archlinuxarm.org/aarch64/ArchLinuxARM-aarch64-latest.tar.gz" || \
+    wget -nv -O "$ARCH_TAR" \
+        "https://mirrors.tuna.tsinghua.edu.cn/archlinuxarm/os/ArchLinuxARM-aarch64-latest.tar.gz" || \
+    wget -nv -O "$ARCH_TAR" \
+        "https://mirrors.ustc.edu.cn/archlinuxarm/os/ArchLinuxARM-aarch64-latest.tar.gz" || {
+        echo "Error: All Arch Linux ARM mirrors failed" >&2; exit 1
     }
 fi
 
