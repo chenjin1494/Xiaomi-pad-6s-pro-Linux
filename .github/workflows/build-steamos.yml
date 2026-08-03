@@ -168,18 +168,19 @@ jobs:
             vulkan-headers glslang-tools spirv-tools \
             pkg-config cmake python3-packaging
 
-      - name: "Download Mesa Source"
-        run: |
-          wget -q https://mesa.freedesktop.org/archive/mesa-25.1.5.tar.xz
-          tar -xf mesa-25.1.5.tar.xz
+      - name: "Clone Mesa (mainline)"
+        run: git clone --depth=1 https://gitlab.freedesktop.org/mesa/mesa.git
 
       - name: "Build Mesa"
         run: |
-          cd mesa-25.1.5
+          cd mesa
+          MESA_VER=$(git describe --tags --always 2>/dev/null || echo "git-mainline")
+          echo "Mesa version: $MESA_VER"
           meson setup build \
             --prefix=/usr \
             --libdir=lib/aarch64-linux-gnu \
             --buildtype=release \
+            -Db_lto=true \
             -Dplatforms=wayland,x11 \
             -Dgallium-drivers=freedreno,swrast,virgl \
             -Dvulkan-drivers=freedreno \
@@ -187,30 +188,31 @@ jobs:
             -Degl=enabled -Dgbm=enabled -Dopengl=true \
             -Dllvm=enabled -Dshared-llvm=enabled \
             -Dshader-cache=enabled \
-            -Dgallium-extra-hud=false -Dgallium-rusticl=false \
+            -Dgallium-extra-hud=true -Dgallium-rusticl=false \
             -Dgallium-va=disabled -Dgallium-vdpau=disabled \
             -Dgallium-xa=disabled -Dva-api=disabled -Dvdpau=disabled \
             -Dvalgrind=disabled -Dlibunwind=disabled -Dlmsensors=disabled \
             -Dbuild-tests=false -Dtools=[] -Ddraw-use-llvm=false
           ninja -C build
           DESTDIR=${{ github.workspace }}/mesa-stage ninja -C build install
+          echo "mesa_version=$MESA_VER" >> $GITHUB_OUTPUT
 
       - name: "Package Mesa"
         run: |
+          MESA_VER=$(cd mesa && git describe --tags --always 2>/dev/null || echo "git")
           mkdir -p mesa-pkg/DEBIAN
           cp -r mesa-stage/usr mesa-pkg/
-          # Move libs to Arch-compatible path
           if [ -d mesa-pkg/usr/lib/aarch64-linux-gnu ]; then
             cp -r mesa-pkg/usr/lib/aarch64-linux-gnu/* mesa-pkg/usr/lib/ 2>/dev/null || true
           fi
           cat > mesa-pkg/DEBIAN/control << EOF
           Package: mesa-turnip
-          Version: 25.1.5-1
+          Version: ${MESA_VER}-1
           Architecture: arm64
-          Description: Mesa with Turnip Vulkan + Freedreno drivers (SM8550 Adreno 740)
+          Description: Mesa mainline with Turnip Vulkan + Freedreno (Adreno 740, LTO optimized)
           EOF
           dpkg-deb --build mesa-pkg
-          mv mesa-pkg.deb mesa-turnip_25.1.5-1_arm64.deb
+          mv mesa-pkg.deb "mesa-turnip_${MESA_VER}_arm64.deb"
 
       - name: "Upload"
         uses: actions/upload-artifact@v4

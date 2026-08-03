@@ -243,8 +243,7 @@ ESEOF
 # ---------------------------------------------------------------------------
 install_mesa_from_source() {
     local rootdir="$1"
-    local mesa_version="25.1.5"
-    echo "Building Mesa ${mesa_version} from source (Turnip + Freedreno)..."
+    echo "Building Mesa from mainline git (Turnip + Freedreno)..."
 
     # Install build dependencies
     chroot "$rootdir" pacman -S --noconfirm --needed \
@@ -281,26 +280,30 @@ install_mesa_from_source() {
         pkgconf \
         python-packaging 2>/dev/null || true
 
-    # Download Mesa source
-    local mesa_tar="mesa-${mesa_version}.tar.xz"
-    local mesa_url="https://mesa.freedesktop.org/archive/${mesa_tar}"
+    # Clone Mesa mainline
     local build_dir="/tmp/mesa-build"
-
     mkdir -p "$rootdir$build_dir"
-    wget -nv -O "$rootdir$build_dir/$mesa_tar" "$mesa_url" || {
-        echo "Error: Failed to download Mesa source" >&2
+    git clone --depth=1 https://gitlab.freedesktop.org/mesa/mesa.git "$rootdir$build_dir/mesa" || {
+        echo "Error: Failed to clone Mesa" >&2
         return 1
     }
-    chroot "$rootdir" bash -c "cd $build_dir && tar -xf $mesa_tar"
 
-    local src_dir="$build_dir/mesa-${mesa_version}"
+    local src_dir="$build_dir/mesa"
+    local mesa_version
+    mesa_version=$(cd "$rootdir$build_dir/mesa" && git describe --tags --always 2>/dev/null || echo "git")
 
-    # Configure with meson — Turnip (vulkan) + Freedreno (gallium) for Adreno 740
+    # Configure with meson — Turnip + Freedreno for Adreno 740
+    # Performance optimizations:
+    #   - release buildtype with b_lto for link-time optimization
+    #   - shader-cache for reduced stuttering
+    #   - draw-use-llvm=false (faster CPU-side, freedreno doesn't need it)
     chroot "$rootdir" bash -c "cd $src_dir && \
         meson setup build \
             --prefix=/usr \
             --libdir=lib \
             --buildtype=release \
+            -Db_lto=true \
+            -Db_pgo=off \
             -Dplatforms=wayland,x11 \
             -Dgallium-drivers=freedreno,swrast,virgl \
             -Dvulkan-drivers=freedreno \
@@ -312,7 +315,7 @@ install_mesa_from_source() {
             -Dllvm=enabled \
             -Dshared-llvm=enabled \
             -Dshader-cache=enabled \
-            -Dgallium-extra-hud=false \
+            -Dgallium-extra-hud=true \
             -Dgallium-rusticl=false \
             -Dgallium-va=disabled \
             -Dgallium-vdpau=disabled \
@@ -344,7 +347,7 @@ install_mesa_from_source() {
     # Cleanup build dir
     chroot "$rootdir" rm -rf "$build_dir"
 
-    echo "Mesa ${mesa_version} (Turnip + Freedreno) built and installed"
+    echo "Mesa ${mesa_version} (Turnip + Freedreno, LTO) built and installed"
 }
 
 # ---------------------------------------------------------------------------
@@ -353,34 +356,18 @@ install_mesa_from_source() {
 # ---------------------------------------------------------------------------
 install_eden() {
     local rootdir="$1"
-    echo "Installing Eden (Nintendo Switch emulator)..."
+    echo "Installing Eden v0.2.1 (Nintendo Switch emulator)..."
 
-    # Try AUR first
-    chroot "$rootdir" pacman -S --noconfirm --needed eden 2>/dev/null || {
-        echo "  eden not in repos, trying eden-bin (AppImage)..."
+    # Download from stable.eden-emu.dev
+    local eden_url="https://stable.eden-emu.dev/v0.2.1/Eden-Linux-v0.2.1-aarch64-clang-pgo.AppImage"
+    wget -nv -O "$rootdir/usr/local/bin/eden.AppImage" "$eden_url" || {
+        echo "Warning: Eden download failed, trying AUR fallback..."
         chroot "$rootdir" pacman -S --noconfirm --needed eden-bin 2>/dev/null || {
-            echo "  Trying manual Eden AppImage install..."
-            # Download latest AppImage from GitHub releases
-            local eden_url
-            eden_url=$(wget -q -O - "https://api.github.com/repos/pstrzelczak/eden-emu/releases/latest" 2>/dev/null | \
-                python3 -c "import sys,json; r=json.load(sys.stdin); [print(a['browser_download_url']) for a in r.get('assets',[]) if 'AppImage' in a['name'] and 'aarch64' in a['name'].lower()]" 2>/dev/null | head -1)
-            if [ -z "$eden_url" ]; then
-                # Fallback: try eden-emulator org
-                eden_url=$(wget -q -O - "https://api.github.com/repos/eden-emulator/Releases/releases/latest" 2>/dev/null | \
-                    python3 -c "import sys,json; r=json.load(sys.stdin); [print(a['browser_download_url']) for a in r.get('assets',[]) if 'AppImage' in a['name']]" 2>/dev/null | head -1)
-            fi
-            if [ -n "$eden_url" ]; then
-                wget -nv -O "$rootdir/usr/local/bin/eden.AppImage" "$eden_url" || {
-                    echo "Warning: Eden download failed" >&2
-                    return 1
-                }
-                chmod +x "$rootdir/usr/local/bin/eden.AppImage"
-            else
-                echo "Warning: Could not find Eden AppImage download URL" >&2
-                return 1
-            fi
+            echo "Warning: Eden install failed" >&2
+            return 1
         }
     }
+    chmod +x "$rootdir/usr/local/bin/eden.AppImage" 2>/dev/null || true
 
     # Eden config directory
     local user="${USERNAME:-gamer}"
