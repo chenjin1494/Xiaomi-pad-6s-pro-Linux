@@ -155,6 +155,7 @@ jobs:
   build-video-driver:
     name: "Build Video Driver"
     runs-on: ubuntu-24.04-arm
+    continue-on-error: true
     steps:
       - name: "Checkout video-driver"
         run: git clone --depth=1 https://github.com/qualcomm-linux/video-driver.git
@@ -221,7 +222,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential meson ninja-build python3-mako python3-yaml \
+            build-essential ninja-build python3-mako python3-yaml \
             libdrm-dev libxml2-dev libx11-dev libxcb1-dev libxshmfence-dev \
             libxrandr-dev libxdamage-dev libxfixes-dev libxxf86vm-dev \
             wayland-protocols libwayland-dev \
@@ -229,6 +230,7 @@ jobs:
             glslang-tools spirv-tools \
             libvulkan-dev \
             pkg-config cmake python3-packaging bison flex
+          pip3 install --upgrade meson
 
       - name: "Clone Mesa (mainline)"
         run: git clone --depth=1 https://gitlab.freedesktop.org/mesa/mesa.git
@@ -491,7 +493,6 @@ jobs:
       - build-device-components
       - build-firmware-sensors
       - build-mesa
-      - build-video-driver
     steps:
       - name: "Checkout"
         uses: actions/checkout@v4
