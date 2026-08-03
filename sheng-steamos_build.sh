@@ -2,333 +2,277 @@
 set -euo pipefail
 
 # =============================================================================
-# sheng-steamos_build.sh — SteamOS 风格游戏系统构建器 (debootstrap)
+# sheng-steamos_build.sh — SteamOS-style Gaming System (Arch Linux ARM)
 # =============================================================================
-# 参考 debian-sheng 架构，使用 debootstrap 创建纯净基础系统，
-# 所有组件以 .deb 包形式安装。
+# Uses Arch Linux ARM as base. Components installed via pacman.
 #
-# 模式:
-#   local    — 单脚本本地构建 (适合开发者)
-#   ci       — CI 环境，假设 .deb 已由上游 Job 构建好
-#
-# 用法:
+# Usage:
 #   sudo ./sheng-steamos_build.sh [options]
 #
-#   选项:
-#     --suite=<ver>         Debian 版本 (默认: trixie)
-#     --desktop=<de>        桌面环境: gamescope|kde|gnome|server (默认: gamescope)
-#     --launcher=<type>     游戏启动器: steam|retroarch|both (默认: steam)
-#     --boot=<mode>         启动模式: single|dual (默认: dual)
-#     --autologin=<bool>    自动登录 (默认: true)
-#     --username=<name>     用户名 (默认: gamer)
-#     --hostname=<name>     主机名 (默认: sheng-steamos)
-#     --password=<pass>     密码 (默认: 通过环境变量 PASSWORD 或默认值)
-#     --kernel=<ver>        内核版本 (默认: latest)
-#     --output=<type>       输出: image|sd|bootimg (默认: image)
-#     --mode=<build>        构建模式: local|ci (默认: local)
+# Options:
+#   --desktop=<de>        gamescope|kde|gnome|server (default: gamescope)
+#   --launcher=<type>     steam|retroarch|both (default: steam)
+#   --boot=<mode>         single|dual (default: dual)
+#   --autologin=<bool>    true|false (default: true)
+#   --username=<name>     (default: gamer)
+#   --hostname=<name>     (default: sheng-steamos)
+#   --password=<pass>     (default: from env PASSWORD or 'password')
+#   --output=<type>       image|sd|bootimg (default: image)
+#   --mode=<build>        local|ci (default: local)
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/rootfs-common.sh"
 
-# --- 默认值 ---
-SUITE="trixie"
+# Defaults
 DESKTOP="gamescope"
 LAUNCHER="steam"
 BOOT_MODE="dual"
 AUTOLOGIN="true"
 USERNAME="gamer"
 HOSTNAME="sheng-steamos"
-PASSWORD="${PASSWORD:-gamer}"
-KERNEL_VERSION="latest"
+PASSWORD="${PASSWORD:-password}"
 OUTPUT_TYPE="image"
 BUILD_MODE="local"
 
-# 解析参数
 for arg in "$@"; do
     case "$arg" in
-        --suite=*)      SUITE="${arg#*=}" ;;
-        --desktop=*)    DESKTOP="${arg#*=}" ;;
-        --launcher=*)   LAUNCHER="${arg#*=}" ;;
-        --boot=*)       BOOT_MODE="${arg#*=}" ;;
-        --autologin=*)  AUTOLOGIN="${arg#*=}" ;;
-        --username=*)   USERNAME="${arg#*=}" ;;
-        --hostname=*)   HOSTNAME="${arg#*=}" ;;
-        --password=*)   PASSWORD="${arg#*=}" ;;
-        --kernel=*)     KERNEL_VERSION="${arg#*=}" ;;
-        --output=*)     OUTPUT_TYPE="${arg#*=}" ;;
-        --mode=*)       BUILD_MODE="${arg#*=}" ;;
+        --desktop=*)   DESKTOP="${arg#*=}" ;;
+        --launcher=*)  LAUNCHER="${arg#*=}" ;;
+        --boot=*)      BOOT_MODE="${arg#*=}" ;;
+        --autologin=*) AUTOLOGIN="${arg#*=}" ;;
+        --username=*)  USERNAME="${arg#*=}" ;;
+        --hostname=*)  HOSTNAME="${arg#*=}" ;;
+        --password=*)  PASSWORD="${arg#*=}" ;;
+        --output=*)    OUTPUT_TYPE="${arg#*=}" ;;
+        --mode=*)      BUILD_MODE="${arg#*=}" ;;
         -h|--help)
             sed -n '2,/^# ====/p' "$0" | head -n -1 | sed 's/^# //' | sed 's/^#//'
-            exit 0
-            ;;
-        *) echo "未知选项: $arg" >&2; exit 1 ;;
+            exit 0 ;;
+        *) echo "Unknown option: $arg" >&2; exit 1 ;;
     esac
 done
 
-# 校验
-case "$DESKTOP" in
-    gamescope|kde|gnome|server) ;;
-    *) echo "错误: 无效桌面 '$DESKTOP'" >&2; exit 1 ;;
-esac
-case "$LAUNCHER" in
-    steam|retroarch|both) ;;
-    *) echo "错误: 无效启动器 '$LAUNCHER'" >&2; exit 1 ;;
-esac
-case "$BOOT_MODE" in
-    single|dual) ;;
-    *) echo "错误: 无效启动模式 '$BOOT_MODE'" >&2; exit 1 ;;
-esac
+# Validate
+case "$DESKTOP" in gamescope|kde|gnome|server) ;; *) echo "Invalid desktop: $DESKTOP" >&2; exit 1 ;; esac
+case "$LAUNCHER" in steam|retroarch|both) ;; *) echo "Invalid launcher: $LAUNCHER" >&2; exit 1 ;; esac
+case "$BOOT_MODE" in single|dual) ;; *) echo "Invalid boot mode: $BOOT_MODE" >&2; exit 1 ;; esac
 
 IMAGE_SIZE="10G"
 UUID="ee8d3593-59b1-480e-a3b6-4fefb17ee7d8"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-ROOTFS_IMG="sheng-steamos_${SUITE}_${LAUNCHER}_${TIMESTAMP}.img"
-
-if [ "$BOOT_MODE" = "dual" ]; then
-    PARTLABEL="linux"
-else
-    PARTLABEL="userdata"
-fi
+ROOTFS_IMG="sheng-steamos_${LAUNCHER}_${TIMESTAMP}.img"
+[ "$BOOT_MODE" = "dual" ] && PARTLABEL="linux" || PARTLABEL="userdata"
 
 echo ""
-echo "╔═══════════════════════════════════════════════════════════════════╗"
-echo "║       SteamOS 风格游戏系统 — debootstrap 构建                   ║"
-echo "╠═══════════════════════════════════════════════════════════════════╣"
-echo "║  基础: Debian ${SUITE} (arm64)                                     "
-echo "║  桌面: ${DESKTOP} | 启动器: ${LAUNCHER}                            "
-echo "║  启动: ${BOOT_MODE} (PARTLABEL=${PARTLABEL})                      "
-echo "║  用户: ${USERNAME} | 自动登录: ${AUTOLOGIN}                       "
-echo "║  输出: ${OUTPUT_TYPE}                                             "
-echo "╚═══════════════════════════════════════════════════════════════════╝"
+echo "============================================="
+echo " SteamOS Gaming System (Arch Linux ARM)"
+echo "============================================="
+echo " Desktop:  $DESKTOP"
+echo " Launcher: $LAUNCHER"
+echo " Boot:     $BOOT_MODE (PARTLABEL=$PARTLABEL)"
+echo " User:     $USERNAME"
+echo " Output:   $OUTPUT_TYPE"
+echo "============================================="
 
-# ===========================================================================
-# Step 1: 创建镜像
-# ===========================================================================
+# ==========================================================================
+# Step 1: Create image
+# ==========================================================================
 echo ""
-echo "━━━ [1/9] 创建 rootfs 镜像 (${IMAGE_SIZE}) ━━━"
+echo "[1/9] Creating rootfs image ($IMAGE_SIZE)..."
 ROOTDIR="rootdir"
 create_image "$IMAGE_SIZE" "$ROOTFS_IMG" "$UUID"
 setup_chroot_mounts "$ROOTDIR"
 trap_teardown "$ROOTDIR"
 
-# ===========================================================================
-# Step 2: debootstrap — 安装纯净 Debian 基础系统
-# ===========================================================================
+# ==========================================================================
+# Step 2: Install Arch Linux ARM base system
+# ==========================================================================
 echo ""
-echo "━━━ [2/9] debootstrap (${SUITE}, arm64) ━━━"
+echo "[2/9] Installing Arch Linux ARM base system..."
 
-# debootstrap 需要网络 DNS
-cp /etc/resolv.conf "$ROOTDIR/etc/resolv.conf"
+ARCH_TAR="ArchLinuxARM-aarch64-latest.tar.gz"
+ARCH_MIRROR="https://mirrors.tuna.tsinghua.edu.cn/archlinux-arm/os/aarch64"
 
-debootstrap \
-    --arch=arm64 \
-    --components=main,contrib,non-free-firmware \
-    --include=systemd,systemd-sysv \
-    "$SUITE" \
-    "$ROOTDIR" \
-    http://deb.debian.org/debian/
+if [ ! -f "$ARCH_TAR" ]; then
+    echo "Downloading Arch Linux ARM aarch64 rootfs..."
+    wget -nv -O "$ARCH_TAR" "${ARCH_MIRROR}/ArchLinuxARM-aarch64-latest.tar.gz" || {
+        wget -nv -O "$ARCH_TAR" \
+            "https://mirrors.ustc.edu.cn/archlinuxarm/os/aarch64/ArchLinuxARM-aarch64-latest.tar.gz" || {
+            echo "Error: Download failed" >&2; exit 1
+        }
+    }
+fi
+
+echo "Extracting Arch Linux ARM rootfs..."
+bsdtar -xpf "$ARCH_TAR" -C "$ROOTDIR/"
+
+echo "Initializing pacman keyring..."
+chroot "$ROOTDIR" pacman-key --init
+chroot "$ROOTDIR" pacman-key --populate archlinuxarm
 
 setup_dns "$ROOTDIR" 8.8.8.8 1.1.1.1
 
-# ===========================================================================
-# Step 3: 安装 .deb 组件包
-# ===========================================================================
+# Configure mirrors
+cat > "$ROOTDIR/etc/pacman.d/mirrorlist" <<'MIRROR'
+Server = https://mirrors.tuna.tsinghua.edu.cn/archlinuxarm/$arch/$repo
+Server = https://mirrors.ustc.edu.cn/archlinuxarm/$arch/$repo
+Server = http://os.archlinuxarm.org/$arch/$repo
+MIRROR
+
+echo "Running system update..."
+chroot "$ROOTDIR" pacman -Syu --noconfirm --needed
+
+# ==========================================================================
+# Step 3: Install kernel + firmware
+# ==========================================================================
 echo ""
-echo "━━━ [3/9] 安装设备组件 .deb 包 ━━━"
+echo "[3/9] Installing kernel + firmware..."
 
-# 收集所有 .deb (CI 模式从当前目录收集，local 模式从各处收集)
-DEB_DIR=$(mktemp -d)
-DEB_COUNT=0
-
-collect_debs() {
-    local dir="$1" pattern="$2"
-    for f in "$dir"/$pattern; do
-        if [ -f "$f" ]; then
-            cp "$f" "$DEB_DIR/"
-            DEB_COUNT=$((DEB_COUNT + 1))
-        fi
-    done
-}
-
-# 从工作目录收集 (CI 产出的 artifact)
-collect_debs "$SCRIPT_DIR" "*.deb"
-collect_debs "$SCRIPT_DIR/rpm-output" "*.rpm" 2>/dev/null || true
-
-# 从 lib/debs 目录收集 (预打包的 .deb)
-if [ -d "$SCRIPT_DIR/lib/debs" ]; then
-    collect_debs "$SCRIPT_DIR/lib/debs" "*.deb"
+# Try injecting project kernel .deb/.rpm first
+INJECTED=0
+if ls "$SCRIPT_DIR"/linux-xiaomi-sheng*.deb &>/dev/null 2>&1; then
+    echo "  -> Injecting .deb kernel packages"
+    inject_deb_kernel "$ROOTDIR" "$SCRIPT_DIR/linux-xiaomi-sheng*.deb"
+    INJECTED=1
+elif ls "$SCRIPT_DIR"/rpm-output/*.rpm &>/dev/null 2>&1; then
+    echo "  -> Injecting .rpm kernel packages"
+    inject_rpm_packages "$ROOTDIR" "$SCRIPT_DIR/rpm-output/*.rpm"
+    INJECTED=1
 fi
 
-echo "  共收集 ${DEB_COUNT} 个 .deb 包"
+if [ "$INJECTED" -eq 0 ]; then
+    echo "  -> Using Arch Linux ARM repo kernel"
+    chroot "$ROOTDIR" pacman -S --noconfirm --needed linux-aarch64
+fi
 
+# Generate initramfs
+KERNEL_MODULE_DIR=$(detect_kernel_module_dir "$ROOTDIR")
+if [ -n "$KERNEL_MODULE_DIR" ]; then
+    echo "  Kernel: $KERNEL_MODULE_DIR"
+    chroot "$ROOTDIR" mkinitcpio -P 2>/dev/null || \
+        chroot "$ROOTDIR" mkinitcpio -k "$KERNEL_MODULE_DIR" -g /boot/initramfs-linux.img 2>/dev/null || true
+fi
+
+# Inject firmware
+echo "Injecting device firmware..."
+[ -d "$SCRIPT_DIR/firmware-xiaomi-sheng/usr/lib" ] && \
+    cp -r "$SCRIPT_DIR/firmware-xiaomi-sheng/usr/lib"/* "$ROOTDIR/usr/lib/" 2>/dev/null || true
+[ -d "$SCRIPT_DIR/firmware" ] && \
+    cp -r "$SCRIPT_DIR/firmware"/* "$ROOTDIR/usr/lib/firmware/" 2>/dev/null || true
+
+# Inject ALSA UCM
+echo "Injecting ALSA UCM config..."
+[ -d "$SCRIPT_DIR/alsa-xiaomi-sheng/usr/share/alsa/ucm2" ] && \
+    cp -r "$SCRIPT_DIR/alsa-xiaomi-sheng/usr/share/alsa/ucm2"/* \
+        "$ROOTDIR/usr/share/alsa/ucm2/" 2>/dev/null || true
+
+# Inject .deb device packages (fastrpc, libssc, sensors, etc.)
+echo "Injecting device .deb packages..."
+DEB_DIR=$(mktemp -d)
+for pattern in "*.deb"; do
+    for f in "$SCRIPT_DIR"/$pattern; do
+        [ -f "$f" ] && cp "$f" "$DEB_DIR/"
+    done
+done
+[ -d "$SCRIPT_DIR/lib/debs" ] && cp "$SCRIPT_DIR/lib/debs"/*.deb "$DEB_DIR/" 2>/dev/null || true
+
+DEB_COUNT=$(ls -1 "$DEB_DIR"/*.deb 2>/dev/null | wc -l)
 if [ "$DEB_COUNT" -gt 0 ]; then
-    cp "$DEB_DIR"/*.deb "$ROOTDIR/tmp/" 2>/dev/null || true
-    chroot "$ROOTDIR" bash -c "apt-get update && apt-get install -y /tmp/*.deb 2>&1 || apt-get install -f -y"
-    chroot "$ROOTDIR" rm -f /tmp/*.deb
+    echo "  Found $DEB_COUNT .deb packages, extracting..."
+    for deb in "$DEB_DIR"/*.deb; do
+        echo "    -> $(basename "$deb")"
+        dpkg-deb --fsys-tarfile "$deb" | tar -x --keep-directory-symlink -C "$ROOTDIR/" 2>/dev/null || true
+    done
+    # Run postinst scripts
+    for deb in "$DEB_DIR"/*.deb; do
+        pkg_name=$(dpkg-deb -f "$deb" Package 2>/dev/null || echo "")
+        postinst="$ROOTDIR/var/lib/dpkg/info/${pkg_name}.postinst"
+        if [ -f "$postinst" ]; then
+            chroot "$ROOTDIR" bash "/var/lib/dpkg/info/${pkg_name}.postinst" configure 2>/dev/null || true
+        fi
+    done
 fi
 rm -rf "$DEB_DIR"
 
-# ===========================================================================
-# Step 4: 内核注入
-# ===========================================================================
+# ==========================================================================
+# Step 4: Install base system packages
+# ==========================================================================
 echo ""
-echo "━━━ [4/9] 内核注入 ━━━"
+echo "[4/9] Installing base system packages..."
 
-# 检查内核 .deb 是否已安装
-KERNEL_INSTALLED=false
-if chroot "$ROOTDIR" dpkg -l | grep -q "linux-xiaomi-sheng" 2>/dev/null; then
-    KERNEL_INSTALLED=true
-    echo "  ✅ 内核 .deb 已安装"
-fi
+chroot "$ROOTDIR" pacman -S --noconfirm --needed \
+    systemd sudo vim wget curl base-devel git xz \
+    pciutils usbutils dialog yad xdg-user-dirs
 
-if [ "$KERNEL_INSTALLED" = false ]; then
-    # 尝试从预编译 .deb 安装
-    if ls "$SCRIPT_DIR"/linux-xiaomi-sheng*.deb &>/dev/null 2>&1; then
-        echo "  -> 从本地 .deb 安装内核"
-        chroot "$ROOTDIR" apt-get install -y /tmp/linux-xiaomi-sheng*.deb 2>/dev/null || true
-    else
-        echo "  -> 使用 Debian 仓库内核"
-        chroot "$ROOTDIR" apt-get install -y linux-image-arm64 || {
-            echo "  警告: 仓库内核安装失败，跳过" >&2
-        }
-    fi
-fi
-
-# 生成 initramfs
-KERNEL_MODULE_DIR=$(detect_kernel_module_dir "$ROOTDIR")
-if [ -n "$KERNEL_MODULE_DIR" ]; then
-    echo "  内核版本: $KERNEL_MODULE_DIR"
-    chroot "$ROOTDIR" update-initramfs -c -k "$KERNEL_MODULE_DIR" 2>/dev/null || true
-fi
-
-# ===========================================================================
-# Step 5: 安装桌面环境
-# ===========================================================================
+# ==========================================================================
+# Step 5: Install gaming components
+# ==========================================================================
 echo ""
-echo "━━━ [5/9] 安装桌面环境 (${DESKTOP}) ━━━"
-
-case "$DESKTOP" in
-    gamescope)
-        # Gamescope 作为主合成器 (SteamOS 模式)
-        # 先装最小 X/Wayland 基础
-        chroot "$ROOTDIR" apt-get install -y --no-install-recommends \
-            xwayland \
-            libgl1-mesa-dri \
-            libvulkan1 \
-            mesa-vulkan-drivers \
-            fonts-noto \
-            fonts-dejavu-core || true
-
-        # Gamescope 需要从 backports 或自行编译
-        chroot "$ROOTDIR" apt-get install -y --no-install-recommends \
-            gamescope 2>/dev/null || {
-            echo "  警告: gamescope 不在仓库中，尝试 backports..."
-            echo "deb http://deb.debian.org/debian ${SUITE}-backports main" > \
-                "$ROOTDIR/etc/apt/sources.list.d/backports.list"
-            chroot "$ROOTDIR" apt-get update
-            chroot "$ROOTDIR" apt-get install -y -t ${SUITE}-backports gamescope 2>/dev/null || {
-                echo "  警告: gamescope 安装失败，使用 Weston 替代"
-                chroot "$ROOTDIR" apt-get install -y --no-install-recommends weston
-            }
-        }
-        ;;
-    kde)
-        chroot "$ROOTDIR" apt-get install -y --no-install-recommends \
-            plasma-desktop plasma-workspace plasma-nm \
-            sddm konsole dolphin kate \
-            firefox-esr \
-            pipewire-alsa \
-            xdg-desktop-portal-kde \
-            kde-config-plymouth plymouth-theme-breeze 2>/dev/null || {
-            # fallback: 最小 KDE
-            chroot "$ROOTDIR" apt-get install -y --no-install-recommends \
-                plasma-desktop sddm konsole dolphin pipewire-alsa
-        }
-        ;;
-    gnome)
-        chroot "$ROOTDIR" apt-get install -y --no-install-recommends \
-            gnome-shell gnome-session gnome-terminal \
-            gdm3 gnome-control-center \
-            firefox-esr \
-            pipewire-alsa 2>/dev/null || {
-            chroot "$ROOTDIR" apt-get install -y --no-install-recommends \
-                gnome-shell gdm3 gnome-terminal pipewire-alsa
-        }
-        ;;
-    server)
-        echo "  无桌面环境 (server 模式)"
-        ;;
-esac
-
-# ===========================================================================
-# Step 6: 安装游戏组件
-# ===========================================================================
-echo ""
-echo "━━━ [6/9] 安装游戏组件 (launcher=${LAUNCHER}) ━━━"
+echo "[5/9] Installing gaming components..."
 
 source "$SCRIPT_DIR/lib/gaming-packages.sh"
 
-# 游戏基础 (音频、输入、显示)
 install_gaming_base "$ROOTDIR"
-
-# MangoHud + 手柄
+install_gamescope "$ROOTDIR"
 install_mangohud "$ROOTDIR" 2>/dev/null || true
 install_controller_support "$ROOTDIR" 2>/dev/null || true
 
-# Steam
 if [ "$LAUNCHER" = "steam" ] || [ "$LAUNCHER" = "both" ]; then
     echo ""
-    echo "  >>> 安装原生 ARM64 Steam + Proton ARM64..."
+    echo "  >>> Installing Native ARM64 Steam + Proton ARM64 + FEX-Emu..."
     install_steam "$ROOTDIR"
 fi
 
-# RetroArch
 if [ "$LAUNCHER" = "retroarch" ] || [ "$LAUNCHER" = "both" ]; then
     echo ""
-    echo "  >>> 安装 RetroArch + EmulationStation..."
+    echo "  >>> Installing RetroArch + EmulationStation..."
     install_retroarch "$ROOTDIR" 2>/dev/null || true
     install_emulationstation "$ROOTDIR" 2>/dev/null || true
 fi
 
-# ===========================================================================
-# Step 7: 系统配置
-# ===========================================================================
-echo ""
-echo "━━━ [7/9] 系统配置 ━━━"
+if [ "$DESKTOP" = "kde" ] || [ "$DESKTOP" = "gnome" ]; then
+    echo ""
+    echo "  >>> Installing Desktop Mode ($DESKTOP)..."
+    install_desktop_mode "$ROOTDIR" "$DESKTOP"
+fi
 
-# 用户
-chroot "$ROOTDIR" useradd -m -s /bin/bash -G sudo,audio,video,input "$USERNAME" 2>/dev/null || true
+# ==========================================================================
+# Step 6: System configuration
+# ==========================================================================
+echo ""
+echo "[6/9] System configuration..."
+
+# Users
+chroot "$ROOTDIR" useradd -m -s /bin/bash -G wheel,audio,video,input,storage "$USERNAME" 2>/dev/null || true
 printf '%s:%s\n' "$USERNAME" "$PASSWORD" | chroot "$ROOTDIR" chpasswd
 printf 'root:%s\n' "$PASSWORD" | chroot "$ROOTDIR" chpasswd
 
-# 主机名
 echo "$HOSTNAME" > "$ROOTDIR/etc/hostname"
 echo "127.0.1.1 $HOSTNAME" >> "$ROOTDIR/etc/hosts"
 
-# sudoers 免密
-echo "%sudo ALL=(ALL:ALL) NOPASSWD: ***" > "$ROOTDIR/etc/sudoers.d/sudo-nopasswd"
-chmod 440 "$ROOTDIR/etc/sudoers.d/sudo-nopasswd"
+echo "%wheel ALL=(ALL:ALL) NOPASSWD: ***" > "$ROOTDIR/etc/sudoers.d/wheel"
+chmod 440 "$ROOTDIR/etc/sudoers.d/wheel"
 
 # fstab
 echo "PARTLABEL=$PARTLABEL / ext4 defaults,noatime,errors=remount-ro 0 1" > "$ROOTDIR/etc/fstab"
 
-# 网络
-chroot "$ROOTDIR" systemctl enable NetworkManager systemd-resolved 2>/dev/null || true
+# Network
+chroot "$ROOTDIR" systemctl enable systemd-resolved NetworkManager 2>/dev/null || true
 
-# 触摸屏校准
+# Touchscreen
 configure_touchscreen "$ROOTDIR"
 
-# WiFi 固件
+# WiFi firmware
 fix_wifi_firmware "$ROOTDIR"
 
 # QRTR
 setup_qrtr_service "$ROOTDIR"
 
-# 串口 console
+# Serial console
 setup_getty_ttyMSM0 "$ROOTDIR"
 
-# 首次启动自动扩容
+# First-boot auto-expand
 cat > "$ROOTDIR/etc/systemd/system/resizefs.service" <<'EOF'
 [Unit]
 Description=Expand root filesystem to fill partition and self-destruct
@@ -347,48 +291,51 @@ WantedBy=default.target
 EOF
 chroot "$ROOTDIR" systemctl enable resizefs.service
 
-# 默认 target
+# Default target
 if [ "$DESKTOP" = "server" ]; then
     chroot "$ROOTDIR" systemctl set-default multi-user.target
 else
     chroot "$ROOTDIR" systemctl set-default graphical.target
 fi
 
-# ===========================================================================
-# Step 8: 配置游戏会话
-# ===========================================================================
+# ==========================================================================
+# Step 7: Configure gaming session
+# ==========================================================================
 echo ""
-echo "━━━ [8/9] 配置游戏会话 ━━━"
+echo "[7/9] Configuring gaming session..."
 
 setup_gaming_session "$ROOTDIR" "$LAUNCHER" "$DESKTOP" "$USERNAME"
 
-# ===========================================================================
-# Step 9: 清理 & 打包
-# ===========================================================================
+# ==========================================================================
+# Step 8: Cleanup
+# ==========================================================================
 echo ""
-echo "━━━ [9/9] 清理 & 打包 ━━━"
+echo "[8/9] Cleaning up..."
 
-chroot "$ROOTDIR" apt-get clean 2>/dev/null || true
-chroot "$ROOTDIR" rm -rf /var/cache/apt/archives/* 2>/dev/null || true
+chroot "$ROOTDIR" pacman -Scc --noconfirm 2>/dev/null || true
+chroot "$ROOTDIR" rm -rf /var/cache/pacman/pkg/* 2>/dev/null || true
 rm -f "$ROOTDIR/etc/resolv.conf"
 
-# 记录包列表
-chroot "$ROOTDIR" dpkg -l > "sheng-steamos_packages_${TIMESTAMP}.txt" 2>/dev/null || true
+capture_package_list "$ROOTDIR" "$(pwd)/sheng-steamos_packages_${TIMESTAMP}.txt"
 
 teardown_mounts "$ROOTDIR"
 
-# 输出
+# ==========================================================================
+# Step 9: Package output
+# ==========================================================================
+echo ""
+echo "[9/9] Packaging output..."
+
 apply_fs_uuid "$UUID" "$ROOTFS_IMG"
 
 case "$OUTPUT_TYPE" in
     image)
-        echo "正在转换为 sparse 镜像..."
-        pack_sparse_image "$ROOTFS_IMG" "sheng-steamos_${SUITE}_${LAUNCHER}_${TIMESTAMP}.7z"
+        echo "Converting to sparse image..."
+        pack_sparse_image "$ROOTFS_IMG" "sheng-steamos_${LAUNCHER}_${TIMESTAMP}.7z"
         echo ""
-        echo "╔═══════════════════════════════════════════════════════════════╗"
-        echo "║  ✅ rootfs 镜像构建完成                                      ║"
-        echo "║  文件: sheng-steamos_${SUITE}_${LAUNCHER}_${TIMESTAMP}.7z    "
-        echo "╚═══════════════════════════════════════════════════════════════╝"
+        echo "============================================="
+        echo " Done: sheng-steamos_${LAUNCHER}_${TIMESTAMP}.7z"
+        echo "============================================="
         ;;
     sd)
         SD_DIR="sheng-steamos_sd_${TIMESTAMP}"
@@ -396,32 +343,30 @@ case "$OUTPUT_TYPE" in
         [ ! -f "$ABL_PATH" ] && ABL_PATH=""
         create_sd_card_image "$ROOTFS_IMG" "$SD_DIR" "$ABL_PATH"
         echo ""
-        echo "╔═══════════════════════════════════════════════════════════════╗"
-        echo "║  ✅ SD 卡镜像构建完成                                        ║"
-        echo "║  镜像: ${SD_DIR}/xiaomi-sheng-gaming-os.img                   "
-        echo "║  刷写: ${SD_DIR}/flash_sd.sh                                  "
-        echo "╚═══════════════════════════════════════════════════════════════╝"
+        echo "============================================="
+        echo " SD card image: ${SD_DIR}/xiaomi-sheng-gaming-os.img"
+        echo " Flash script:  ${SD_DIR}/flash_sd.sh"
+        echo "============================================="
         ;;
     bootimg)
-        echo "正在生成 boot.img..."
+        echo "Generating boot.img..."
         build_sheng_bootimg "$ROOTFS_IMG" "$BOOT_MODE" "$PARTLABEL" \
             "sheng-steamos_boot_${TIMESTAMP}.img" || true
-        pack_sparse_image "$ROOTFS_IMG" "sheng-steamos_${SUITE}_${LAUNCHER}_${TIMESTAMP}.7z"
+        pack_sparse_image "$ROOTFS_IMG" "sheng-steamos_${LAUNCHER}_${TIMESTAMP}.7z"
         echo ""
-        echo "╔═══════════════════════════════════════════════════════════════╗"
-        echo "║  ✅ boot.img + rootfs 构建完成                                ║"
-        echo "║  rootfs: sheng-steamos_${SUITE}_${LAUNCHER}_${TIMESTAMP}.7z  "
-        echo "║  boot:   sheng-steamos_boot_${TIMESTAMP}.img                  "
-        echo "╚═══════════════════════════════════════════════════════════════╝"
+        echo "============================================="
+        echo " rootfs: sheng-steamos_${LAUNCHER}_${TIMESTAMP}.7z"
+        echo " boot:   sheng-steamos_boot_${TIMESTAMP}.img"
+        echo "============================================="
         ;;
 esac
 
 echo ""
-echo "组件:"
-echo "  基础系统:  Debian ${SUITE} (debootstrap)"
-echo "  桌面:      ${DESKTOP}"
-echo "  启动器:    ${LAUNCHER}"
-echo "  用户:      ${USERNAME} / ${PASSWORD} | root / ${PASSWORD}"
+echo "Components:"
+echo "  Base:      Arch Linux ARM"
+echo "  Desktop:   $DESKTOP"
+echo "  Launcher:  $LAUNCHER"
+echo "  User:      $USERNAME / $PASSWORD"
 echo ""
 trap - EXIT ERR INT TERM
-echo "构建完成 🎮"
+echo "Build complete!"
