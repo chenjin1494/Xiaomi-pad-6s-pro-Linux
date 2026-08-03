@@ -123,6 +123,9 @@ Server = https://mirrors.ustc.edu.cn/archlinuxarm/$arch/$repo
 Server = http://os.archlinuxarm.org/$arch/$repo
 MIRROR
 
+# Skip linux-firmware globally (we inject device-specific firmware)
+sed -i '/^\[options\]/a IgnorePkg = linux-firmware' "$ROOTDIR/etc/pacman.conf"
+
 echo "Running system update..."
 chroot "$ROOTDIR" pacman -Syu --noconfirm --needed
 
