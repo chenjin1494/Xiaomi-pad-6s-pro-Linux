@@ -340,13 +340,15 @@ setup_gaming_session "$ROOTDIR" "$LAUNCHER" "$DESKTOP" "$USERNAME"
 echo ""
 echo "[8/9] Cleaning up..."
 
-chroot "$ROOTDIR" pacman -Scc --noconfirm 2>/dev/null || true
-chroot "$ROOTDIR" rm -rf /var/cache/pacman/pkg/* 2>/dev/null || true
+set +e
+chroot "$ROOTDIR" pacman -Scc --noconfirm 2>/dev/null
+chroot "$ROOTDIR" rm -rf /var/cache/pacman/pkg/* 2>/dev/null
 rm -f "$ROOTDIR/etc/resolv.conf"
+set -e
 
-capture_package_list "$ROOTDIR" "$(pwd)/sheng-steamos_packages_${TIMESTAMP}.txt"
+capture_package_list "$ROOTDIR" "$(pwd)/sheng-steamos_packages_${TIMESTAMP}.txt" 2>/dev/null || true
 
-teardown_mounts "$ROOTDIR"
+teardown_mounts "$ROOTDIR" 2>/dev/null || true
 
 # ==========================================================================
 # Step 9: Package output
