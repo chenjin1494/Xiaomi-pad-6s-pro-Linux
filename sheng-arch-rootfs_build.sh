@@ -98,7 +98,13 @@ MIRRORLIST
     KERNEL_MODULE_DIR=$(detect_kernel_module_dir "$ROOTDIR")
     if [ -n "$KERNEL_MODULE_DIR" ]; then
         chroot "$ROOTDIR" pacman -S --noconfirm --needed mkinitcpio
-        sed -i 's/autodetect[^,]*//g' "$ROOTDIR/etc/mkinitcpio.conf"
+        # 仅移除独立的 autodetect 钩子, 保留其余钩子与右括号
+        # (旧写法 s/autodetect[^,]*//g 会把空格分隔的整行钩子连同 ')' 一起删掉)
+        sed -i 's/[[:space:]]*autodetect[[:space:]]*/ /g' "$ROOTDIR/etc/mkinitcpio.conf"
+        grep -q '^HOOKS=.*)' "$ROOTDIR/etc/mkinitcpio.conf" || {
+            echo "错误: mkinitcpio.conf 的 HOOKS 行被破坏, 缺少右括号" >&2
+            exit 1
+        }
         chroot "$ROOTDIR" mkinitcpio -k "$KERNEL_MODULE_DIR" -g "/boot/initramfs-linux.img"
         if [ -f "$ROOTDIR/boot/vmlinuz-$KERNEL_MODULE_DIR" ]; then
             cp "$ROOTDIR/boot/vmlinuz-$KERNEL_MODULE_DIR" "$ROOTDIR/boot/Image"
