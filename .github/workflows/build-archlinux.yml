@@ -6,7 +6,7 @@ on:
       kernel_version:
         description: '内核版本'
         required: true
-        default: '7.1'
+        default: '7.2'
       kernel_channel:
         description: '内核通道'
         required: true
@@ -50,7 +50,7 @@ jobs:
     with:
       distro: arch
       script: sheng-arch-rootfs_build.sh
-      kernel_version_default: ${{ github.event.inputs.kernel_version || '7.1' }}
+      kernel_version_default: ${{ github.event.inputs.kernel_version || '7.2' }}
       desktop_env: ${{ github.event.inputs.desktop_env }}
       boot_mode: ${{ github.event.inputs.boot_mode }}
       desktop_matrix: '["all"]'
