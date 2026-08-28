@@ -58,6 +58,9 @@ for DE in "${DESKTOPS[@]}"; do
         exit 1
     }
 
+    # 写入 chroot 内 DNS 配置 (基础包中的 resolv.conf 是指向 systemd-resolved
+    # stub 的符号链接, chroot 内无该服务, 否则 pacman 无法解析镜像域名)
+    setup_dns "$ROOTDIR" 8.8.8.8 1.1.1.1 223.5.5.5
 
     # Replace broken mirror with working ones
     cat > "$ROOTDIR/etc/pacman.d/mirrorlist" <<'MIRRORLIST'
