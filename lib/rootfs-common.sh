@@ -7,15 +7,16 @@
 # =============================================================================
 
 # ---------------------------------------------------------------------------
-# create_image  — 创建 ext4 磁盘镜像并挂载
-#   参数: <image_size> <image_path> <filesystem_uuid>
+# create_image  — 创建磁盘镜像并挂载 (ext4 或 btrfs)
+#   参数: <image_size> <image_path> <filesystem_uuid> [fs_type: ext4|btrfs]
+#   btrfs: 创建 @ 与 @home 子卷, @ 挂载为根, @home 挂载到 /home
 #   设置全局: ROOTDIR="rootdir"
 # ---------------------------------------------------------------------------
 create_image() {
-    local image_size="$1" image_path="$2" fs_uuid="$3"
+    local image_size="$1" image_path="$2" fs_uuid="$3" fs_type="${4:-ext4}"
 
     if [ -z "$image_size" ] || [ -z "$image_path" ] || [ -z "$fs_uuid" ]; then
-        echo "错误: create_image 需要 <size> <path> <uuid> 三个参数" >&2
+        echo "错误: create_image 需要 <size> <path> <uuid> [fs_type]" >&2
         return 1
     fi
 
@@ -23,9 +24,22 @@ create_image() {
 
     rm -rf "$ROOTDIR" || true
     truncate -s "$image_size" "$image_path"
-    mkfs.ext4 -O ^metadata_csum "$image_path"
     mkdir -p "$ROOTDIR"
-    mount -o loop "$image_path" "$ROOTDIR"
+
+    if [ "$fs_type" = "btrfs" ]; then
+        # -U 在 mkfs 时写入固定 UUID, -f 覆盖已存在文件
+        mkfs.btrfs -f -U "$fs_uuid" "$image_path"
+        mount -o loop "$image_path" "$ROOTDIR"
+        btrfs subvolume create "$ROOTDIR/@"
+        btrfs subvolume create "$ROOTDIR/@home"
+        umount "$ROOTDIR"
+        mount -o loop,subvol=@ "$image_path" "$ROOTDIR"
+        mkdir -p "$ROOTDIR/home"
+        mount -o loop,subvol=@home "$image_path" "$ROOTDIR/home"
+    else
+        mkfs.ext4 -O ^metadata_csum "$image_path"
+        mount -o loop "$image_path" "$ROOTDIR"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -126,8 +140,15 @@ setup_getty_ttyMSM0() {
 #   参数: <rootdir> <mode:dual|single>
 # ---------------------------------------------------------------------------
 generate_fstab() {
-    local rootdir="$1" mode="$2"
-    if [ "$mode" = "dual" ]; then
+    local rootdir="$1" mode="$2" fs_type="${3:-ext4}"
+    if [ "$fs_type" = "btrfs" ]; then
+        local rootpart="linux"
+        [ "$mode" = "single" ] && rootpart="userdata"
+        cat > "$rootdir/etc/fstab" <<EOF
+PARTLABEL=${rootpart} / btrfs rw,noatime,compress=zstd,subvol=@ 0 0
+PARTLABEL=${rootpart} /home btrfs rw,noatime,compress=zstd,subvol=@home 0 0
+EOF
+    elif [ "$mode" = "dual" ]; then
         echo "PARTLABEL=linux / ext4 defaults,noatime,errors=remount-ro 0 1" > "$rootdir/etc/fstab"
     else
         echo "PARTLABEL=userdata / ext4 defaults,noatime,errors=remount-ro 0 1" > "$rootdir/etc/fstab"
@@ -294,6 +315,7 @@ teardown_mounts() {
     umount -l "$rootdir/dev"  2>/dev/null || true
     umount -l "$rootdir/proc" 2>/dev/null || true
     umount -l "$rootdir/sys"   2>/dev/null || true
+    umount -l "$rootdir/home"  2>/dev/null || true
     umount -l "$rootdir"       2>/dev/null || true
     sleep 1
     rm -rf "$rootdir"
@@ -329,8 +351,13 @@ pack_sparse_image() {
 #   参数: <uuid> <image_path>
 # ---------------------------------------------------------------------------
 apply_fs_uuid() {
-    local uuid="$1" image_path="$2"
-    tune2fs -U "$uuid" "$image_path"
+    local uuid="$1" image_path="$2" fs_type="${3:-ext4}"
+    if [ "$fs_type" = "btrfs" ]; then
+        # -f 跳过 btrfstune 的交互确认, 否则非交互环境会默认拒绝
+        btrfstune -f -U "$uuid" "$image_path"
+    else
+        tune2fs -U "$uuid" "$image_path"
+    fi
 }
 
 # ---------------------------------------------------------------------------

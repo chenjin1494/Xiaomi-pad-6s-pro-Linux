@@ -82,7 +82,7 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt update
-          sudo apt install -y debootstrap libarchive-tools p7zip-full curl wget android-sdk-libsparse-utils
+          sudo apt install -y debootstrap libarchive-tools p7zip-full curl wget android-sdk-libsparse-utils btrfs-progs
 
       - name: Download kernel bundle
         run: |

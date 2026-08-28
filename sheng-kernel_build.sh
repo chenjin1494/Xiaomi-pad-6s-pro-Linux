@@ -101,8 +101,8 @@ install -Dm644 Image.gz-dtb_sheng \
 mv Image.gz-dtb_sheng zImage_sheng
 
 if [ -f "../mkbootimg" ]; then
-    ../mkbootimg --kernel zImage_sheng --cmdline "root=PARTLABEL=linux" --base 0x00000000 --kernel_offset 0x00008000 --tags_offset 0x01e00000 --pagesize 4096 --id -o ../boot_sheng_dualboot.img
-    ../mkbootimg --kernel zImage_sheng --cmdline "root=PARTLABEL=userdata" --base 0x00000000 --kernel_offset 0x00008000 --tags_offset 0x01e00000 --pagesize 4096 --id -o ../boot_sheng_singleboot.img
+    ../mkbootimg --kernel zImage_sheng --cmdline "root=PARTLABEL=linux rootflags=subvol=@" --base 0x00000000 --kernel_offset 0x00008000 --tags_offset 0x01e00000 --pagesize 4096 --id -o ../boot_sheng_dualboot.img
+    ../mkbootimg --kernel zImage_sheng --cmdline "root=PARTLABEL=userdata rootflags=subvol=@" --base 0x00000000 --kernel_offset 0x00008000 --tags_offset 0x01e00000 --pagesize 4096 --id -o ../boot_sheng_singleboot.img
 fi
 
 # --- Install modules ---
@@ -132,7 +132,7 @@ if command -v ukify &>/dev/null; then
         echo "正在构建 EFI 引导镜像 (initramfs: $INITRAMFS)..."
         ukify build \
             --linux="arch/$ARCH/boot/Image.gz" \
-            --cmdline="root=PARTLABEL=linux rw rootwait console=tty0" \
+            --cmdline="root=PARTLABEL=linux rootflags=subvol=@ rw rootwait console=tty0" \
             --initrd="$INITRAMFS" \
             --output="bootaa64.efi"
         install -Dm644 bootaa64.efi "$PKGDIR/boot/bootaa64.efi"

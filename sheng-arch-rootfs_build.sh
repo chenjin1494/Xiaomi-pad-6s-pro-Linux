@@ -9,6 +9,7 @@ source "$(dirname "$0")/lib/rootfs-common.sh"
 # --- Distro-specific configuration ---
 IMAGE_SIZE="8G"
 UUID="ee8d3593-59b1-480e-a3b6-4fefb17ee7d8"
+FS_TYPE="btrfs"
 
 # --- Password configuration (override via env vars) ---
 ROOT_PASS="${ROOT_PASS:-1234}"
@@ -39,10 +40,10 @@ for DE in "${DESKTOPS[@]}"; do
         echo "=========================================="
 
         # Pre-flight checks
-        preflight_checks 10240 bsdtar
+        preflight_checks 10240 bsdtar mkfs.btrfs btrfs btrfstune
 
         # Step 1: Create image
-    create_image "$IMAGE_SIZE" "$ROOTFS_IMG" "$UUID"
+    create_image "$IMAGE_SIZE" "$ROOTFS_IMG" "$UUID" "$FS_TYPE"
     setup_chroot_mounts "$ROOTDIR"
     trap_teardown "$ROOTDIR"
 
@@ -132,12 +133,12 @@ MIRRORLIST
     fix_wifi_firmware "$ROOTDIR"
 
     # Step 6: fstab & cleanup
-    generate_fstab "$ROOTDIR" "$MODE"
+    generate_fstab "$ROOTDIR" "$MODE" "$FS_TYPE"
     chroot "$ROOTDIR" pacman -Scc --noconfirm
     teardown_mounts "$ROOTDIR"
 
     # Step 7: Pack
-    apply_fs_uuid "$UUID" "$ROOTFS_IMG"
+    apply_fs_uuid "$UUID" "$ROOTFS_IMG" "$FS_TYPE"
     pack_sparse_image "$ROOTFS_IMG" "${ROOTFS_IMG%.img}.7z"
 
     echo "${DE^^} - $MODE 版本构建完成！产物: ${ROOTFS_IMG%.img}.7z"
